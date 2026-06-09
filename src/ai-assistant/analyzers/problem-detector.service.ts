@@ -1,0 +1,324 @@
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { PhaseService } from '../../phase/phase.service';
+import { AiImageService } from '../../ai-image/ai-image.service';
+import { InteractionsService } from '../../interaction/interaction.service';
+import { ProfileVisitorsService } from '../../profile-visitors/profile-visitors.service';
+import { UserMetricsService } from '../../user-metrics/user-metrics.service';
+import { PersonalityService } from '../../personality/personality.service';
+import { FeedBuilderService } from '../../feed/feed.service';
+import { TicketService } from 'src/ai-support/services/ticket.service';
+
+export interface UserProblem {
+  category:
+    | 'profile'
+    | 'image'
+    | 'engagement'
+    | 'payment'
+    | 'personality'
+    | 'phase'
+    | 'technical';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+  reason: string;
+  solution: string;
+  impact: string;
+}
+
+@Injectable()
+export class ProblemDetectorService {
+  private readonly logger = new Logger(ProblemDetectorService.name);
+
+  constructor(
+    @Inject(forwardRef(() => PhaseService))
+    private readonly phaseService: PhaseService,
+    private readonly aiImageService: AiImageService,
+    private readonly interactionsService: InteractionsService,
+    private readonly profileVisitorsService: ProfileVisitorsService,
+    private readonly userMetricsService: UserMetricsService,
+    private readonly personalityService: PersonalityService,
+    private readonly feedService: FeedBuilderService,
+    private readonly ticketService: TicketService,
+  ) {}
+
+  async detectProblems(userId: number): Promise<UserProblem[]> {
+    const problems: UserProblem[] = [];
+
+    const [
+      phase,
+      images,
+      interactions,
+      visitors,
+      metrics,
+      personality,
+      feed,
+      supportTickets,
+    ] = await Promise.all([
+      this.phaseService.getPhaseMetrics(userId).catch(() => null),
+      this.aiImageService.findByUser(userId).catch(() => []),
+      this.interactionsService.getUserInteractions(userId).catch(() => []),
+      this.profileVisitorsService.getProfileVisitors(userId).catch(() => []),
+      this.userMetricsService.buildExtraMetrics(userId).catch(() => null),
+      this.personalityService.analyzePersonality(userId).catch(() => null),
+      this.feedService.getUserFeedQuality(userId).catch(() => null),
+      this.ticketService.getUserTickets(userId).catch(() => []),
+    ]);
+
+    const profileProblems = await this.detectProfileProblems(
+      userId,
+      phase,
+      images,
+    );
+    problems.push(...profileProblems);
+
+    const imageProblems = await this.detectImageProblems(userId, images);
+    problems.push(...imageProblems);
+
+    const engagementProblems = await this.detectEngagementProblems(
+      userId,
+      interactions,
+      visitors,
+      metrics,
+    );
+    problems.push(...engagementProblems);
+
+    const personalityProblems = await this.detectPersonalityProblems(
+      userId,
+      personality,
+      interactions,
+    );
+    problems.push(...personalityProblems);
+
+    const phaseProblems = await this.detectPhaseProblems(phase, metrics);
+    problems.push(...phaseProblems);
+
+    return problems.sort((a, b) => {
+      const severityWeight = { critical: 4, high: 3, medium: 2, low: 1 };
+      return severityWeight[b.severity] - severityWeight[a.severity];
+    });
+  }
+
+  private async detectProfileProblems(
+    userId: number,
+    phase: any,
+    images: any[],
+  ): Promise<UserProblem[]> {
+    const problems: UserProblem[] = [];
+
+    if (!phase?.isCompleted) {
+      problems.push({
+        category: 'profile',
+        severity: 'high',
+        description: 'پروفایل شما ناقص است',
+        reason: 'کاربران با پروفایل کامل ۵ برابر بیشتر دیده می‌شوند',
+        solution: 'به بخش ویرایش پروفایل برو و اطلاعات خود را تکمیل کن',
+        impact: '۵ برابر افزایش بازدید پروفایل',
+      });
+    }
+
+    if (!phase?.city) {
+      problems.push({
+        category: 'profile',
+        severity: 'medium',
+        description: 'شهر خود را مشخص نکرده‌ای',
+        reason: 'کاربران همشهری راحت‌تر با هم ارتباط برقرار می‌کنند',
+        solution: 'شهر خود را در پروفایل اضافه کن',
+        impact: '۲ برابر افزایش مچ شدن با همشهری‌ها',
+      });
+    }
+
+    if (!phase?.bio || phase.bio.length < 50) {
+      problems.push({
+        category: 'profile',
+        severity: 'medium',
+        description: 'درباره من کوتاه است',
+        reason: 'کاربران دوست دارند قبل از شروع گفتگو، کمی از طرف مقابل بدانند',
+        solution: 'حداقل ۵۰ کلمه درباره خودت بنویس',
+        impact: '۳ برابر افزایش پیام دریافتی',
+      });
+    }
+
+    return problems;
+  }
+
+  private async detectImageProblems(
+    userId: number,
+    images: any[],
+  ): Promise<UserProblem[]> {
+    const problems: UserProblem[] = [];
+
+    if (images.length === 0) {
+      problems.push({
+        category: 'image',
+        severity: 'critical',
+        description: 'هیچ عکسی آپلود نکرده‌ای',
+        reason: 'پروفایل‌های بدون عکس معمولاً دیده نمی‌شوند',
+        solution: 'حداقل ۳ عکس با کیفیت از خودت آپلود کن',
+        impact: '۱۰ برابر افزایش بازدید',
+      });
+    } else if (images.length < 3) {
+      problems.push({
+        category: 'image',
+        severity: 'medium',
+        description: 'تعداد عکس‌ها کم است',
+        reason: 'کاربران با حداقل ۳ عکس، اعتماد بیشتری جلب می‌کنند',
+        solution: 'حداقل ۳ عکس آپلود کن (ترجیحاً در محیط‌های مختلف)',
+        impact: '۳ برابر افزایش لایک',
+      });
+    }
+
+    const lowQualityImages = images.filter((img) => img.qualityScore < 0.5);
+    if (lowQualityImages.length > 0) {
+      problems.push({
+        category: 'image',
+        severity: 'medium',
+        description: 'بعضی عکس‌ها کیفیت پایینی دارند',
+        reason: 'عکس‌های باکیفیت بیشتر جلب توجه می‌کنند',
+        solution: 'عکس‌های با کیفیت‌تر و واضح‌تر آپلود کن',
+        impact: '۲ برابر افزایش نرخ لایک',
+      });
+    }
+
+    return problems;
+  }
+
+  private async detectEngagementProblems(
+    userId: number,
+    interactions: any[],
+    visitors: any[],
+    metrics: any,
+  ): Promise<UserProblem[]> {
+    const problems: UserProblem[] = [];
+
+    const likeCount = interactions.filter((i) => i.type === 'like').length;
+    const messageCount = interactions.filter(
+      (i) => i.type === 'message',
+    ).length;
+    const viewCount = visitors.length;
+
+    if (likeCount < 5 && metrics?.daysSinceSignup > 3) {
+      problems.push({
+        category: 'engagement',
+        severity: 'high',
+        description: 'لایک کافی نداری',
+        reason: 'کاربران فعال‌تر بیشتر دیده می‌شوند',
+        solution: 'روزانه حداقل ۵ نفر رو لایک کن',
+        impact: 'افزایش ۳ برابری بازدید از پروفایل تو',
+      });
+    }
+
+    if (messageCount === 0 && metrics?.daysSinceSignup > 7) {
+      problems.push({
+        category: 'engagement',
+        severity: 'critical',
+        description: 'هنوز هیچ پیامی نفرستاده‌ای',
+        reason: 'هدف اصلی آشنایی، گفتگوست',
+        solution: 'به ۳ نفری که لایک کردی پیام بده',
+        impact: 'شروع ارتباطات واقعی',
+      });
+    }
+
+    const viewToLikeRatio = viewCount > 0 ? likeCount / viewCount : 0;
+    if (viewCount > 20 && viewToLikeRatio < 0.1) {
+      problems.push({
+        category: 'engagement',
+        severity: 'medium',
+        description: 'نرخ تبدیل بازدید به لایک پایین است',
+        reason: 'احتمالاً پروفایل یا عکس‌ها جذاب نیستند',
+        solution: 'عکس اصلی را عوض کن یا درباره‌ات را جذاب‌تر بنویس',
+        impact: '۲ برابر افزایش لایک',
+      });
+    }
+
+    return problems;
+  }
+
+  private async detectPersonalityProblems(
+    userId: number,
+    personality: any,
+    interactions: any[],
+  ): Promise<UserProblem[]> {
+    const problems: UserProblem[] = [];
+
+    if (!personality) return problems;
+
+    const messages = interactions.filter((i) => i.type === 'message');
+    if (messages.length > 0) {
+      const negativeMessages = messages.filter(
+        (m) => m.sentiment === 'negative',
+      );
+      if (negativeMessages.length / messages.length > 0.3) {
+        problems.push({
+          category: 'personality',
+          severity: 'high',
+          description: 'لحن پیام‌هایت ممکن است کمی تند باشد',
+          reason: 'پیام‌های منفی باعث کاهش پاسخگویی می‌شوند',
+          solution: 'سعی کن با لحن مهربان‌تر و مثبت‌تر صحبت کنی',
+          impact: '۳ برابر افزایش پاسخگویی',
+        });
+      }
+    }
+
+    if (personality.ocean?.extraversion < 0.3) {
+      problems.push({
+        category: 'personality',
+        severity: 'low',
+        description: 'به نظر می‌رسد کمی خجالتی هستی',
+        reason: 'افراد خجالتی معمولاً دیرتر ارتباط برقرار می‌کنند',
+        solution: 'با پیام‌های کوتاه و ساده شروع کن، مثلاً "سلام، حالت چطوره؟"',
+        impact: 'افزایش ۵۰٪ شروع مکالمه',
+      });
+    }
+
+    return problems;
+  }
+
+  private async detectPhaseProblems(
+    phase: any,
+    metrics: any,
+  ): Promise<UserProblem[]> {
+    const problems: UserProblem[] = [];
+
+    if (!phase) return problems;
+
+    switch (phase.phase) {
+      case 'cold':
+        problems.push({
+          category: 'phase',
+          severity: 'high',
+          description: 'در فاز اولیه هستی',
+          reason: 'با تکمیل پروفایل و چند تعامل ساده، وارد فاز گرم می‌شی',
+          solution: phase.suggestedActions?.[0] || 'پروفایلت رو کامل کن',
+          impact: 'وارد شدن به فاز گرم و دیده شدن بیشتر',
+        });
+        break;
+
+      case 'warm':
+        if (!phase.everPaid) {
+          problems.push({
+            category: 'payment',
+            severity: 'medium',
+            description: 'زمان خرید نزدیک است',
+            reason: 'کاربران فعال معمولاً برای امکانات بیشتر خرید می‌کنند',
+            solution: 'با خرید اعتبار، می‌تونی پیام‌های بیشتری بفرستی',
+            impact: 'دسترسی به امکانات ویژه',
+          });
+        }
+        break;
+
+      case 'hot':
+        if (phase.everPaid && metrics?.lastPurchaseDays > 30) {
+          problems.push({
+            category: 'payment',
+            severity: 'medium',
+            description: 'مدتی است خریدی نداشته‌ای',
+            reason: 'کاربران وفادار با خرید مکرر، امکانات بیشتری دارن',
+            solution: 'پکیج VIP با ۲۰٪ تخفیف ویژه تو',
+            impact: 'لایک نامحدود و اولویت در نمایش',
+          });
+        }
+        break;
+    }
+
+    return problems;
+  }
+}
