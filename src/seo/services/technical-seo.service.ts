@@ -49,9 +49,10 @@ export class TechnicalSEOService {
       });
 
       return metrics;
-    } catch (error) {
-      this.logger.error(`Technical SEO analysis failed: ${error.message}`);
-      return null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Competitor analysis failed: ${message}`);
+      return this.analyzeTechnicalSEO();
     }
   }
 

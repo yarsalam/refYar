@@ -41,9 +41,10 @@ export class SEOCollectorService {
         score,
         timestamp: new Date(),
       };
-    } catch (error) {
-      this.logger.error(`SEO collection failed: ${error.message}`);
-      return null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Competitor analysis failed: ${message}`);
+      return this.collectAllMetrics();
     }
   }
 

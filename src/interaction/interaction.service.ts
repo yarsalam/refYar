@@ -27,9 +27,7 @@ export class InteractionsService {
     @InjectRepository(Message)
     private readonly messageRepo: Repository<Message>,
 
-    @Inject(forwardRef(() => PhaseService))
     private readonly phaseService: PhaseService,
-
     private readonly reportBlockService: ReportBlockService,
     private readonly userEventService: UserEventService,
     private readonly revenueScorer: RevenueScorerService,
@@ -97,8 +95,9 @@ export class InteractionsService {
         type: eventType,
         metadata: { source: 'interaction', interactionType: type },
       });
-    } catch (e) {
-      this.logger.warn(`UserEvent failed: ${e.message}`);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`UserEvent failed: ${msg}`);
     }
 
     if (type === 'like' || type === 'superlike') {
@@ -144,8 +143,9 @@ export class InteractionsService {
             this.featureStore.learnFeatureWeights(fromId, 'match'),
             this.featureStore.learnFeatureWeights(toId, 'match'),
           ]);
-        } catch (e) {
-          this.logger.error(`Match learning failed: ${e.message}`);
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          this.logger.error(`Match learning failed: ${msg}`);
         }
       }
     }

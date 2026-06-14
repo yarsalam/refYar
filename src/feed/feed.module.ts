@@ -6,12 +6,18 @@ import { SuggestionModule } from '../suggestion/suggestion.module';
 import { UserEventModule } from '../user-event/user-event.module';
 import { RedisModule } from '../redis/redis.module';
 import { PaymentsModule } from '../payments/payments.module';
-import { FeedBuilderService } from './feed.service';
+import { SEOModule } from '../seo/seo.module';
+import { VipModule } from '../payments/vip/vip.module';
+import { CreditsModule } from '../payments/credits/credits.module';
+import { RelationStatusModule } from '../relation-status/relation-status.module';
+
+// سرویس‌های جدید
+import { FeedCandidateService } from './services/feed-candidate.service';
+import { FeedScoringService } from './services/feed-scoring.service';
+import { FeedRelationService } from './services/feed-relation.service';
+import { FeedPromotionService } from './services/feed-promotion.service';
+import { FeedAssemblerService } from './services/feed-assembler.service';
 import { FeedController } from './feed.controller';
-import { SEOModule } from 'src/seo/seo.module';
-import { VipModule } from 'src/payments/vip/vip.module';
-import { CreditsModule } from 'src/payments/credits/credits.module';
-import { RelationStatusModule } from 'src/relation-status/relation-status.module';
 
 @Module({
   imports: [
@@ -27,7 +33,13 @@ import { RelationStatusModule } from 'src/relation-status/relation-status.module
     RelationStatusModule,
   ],
   controllers: [FeedController],
-  providers: [FeedBuilderService],
-  exports: [FeedBuilderService],
+  providers: [
+    FeedCandidateService,
+    FeedScoringService,
+    FeedRelationService,
+    FeedPromotionService,
+    FeedAssemblerService,
+  ],
+  exports: [FeedAssemblerService],
 })
 export class FeedModule {}

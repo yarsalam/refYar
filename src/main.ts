@@ -9,9 +9,20 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   dotenv.config();
   app.use(cookieParser());
-  app.useGlobalPipes(new ValidationPipe()); // ✅ فعال‌سازی اعتبارسنجی
+  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'], // آدرس فرانت
+    origin: [
+      'https://yourdomain.com',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ], // آدرس فرانت
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: 'Content-Type,Authorization',
     credentials: true, // اگر کوکی ارسال می‌شود

@@ -49,7 +49,7 @@ export class ClientInfoMiddleware implements NestMiddleware {
     //   if (vpnCheck.data.proxy === true || vpnCheck.data.is_proxy === 'yes') {
     //     clientInfo.isVpn = true;
     //   }
-    // } catch (e) {
+    // } catch (e: unknown) {
     //   console.log(`⚠️ [ClientInfo] GeoIP/VPN lookup failed: ${e.message}`);
     // }
 

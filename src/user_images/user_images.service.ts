@@ -191,7 +191,7 @@ export class UserImageService {
       if (fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
-        } catch (err) {
+        } catch (err: unknown) {
           console.error('Error deleting file:', filePath, err);
         }
       } else {

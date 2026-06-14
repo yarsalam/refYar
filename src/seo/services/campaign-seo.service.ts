@@ -89,8 +89,10 @@ export class CampaignSEOService {
 
           aiPredictions = response.data;
           this.logger.log('AI predictions received');
-        } catch (error) {
-          this.logger.error(`AI prediction failed: ${error.message}`);
+        } catch (error: unknown) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.logger.error(`AI prediction failed: ${message}`);
         }
       }
 
@@ -127,8 +129,9 @@ export class CampaignSEOService {
             })),
           }),
         );
-      } catch (e) {
-        this.logger.error('AI feedback failed', e);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.error('AI feedback failed', msg);
       }
 
       if (!aiPredictions) {
@@ -147,8 +150,9 @@ export class CampaignSEOService {
       });
 
       return metrics;
-    } catch (error) {
-      this.logger.error(`Campaign analysis failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Campaign analysis failed: ${message}`);
       return null;
     }
   }

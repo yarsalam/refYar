@@ -47,7 +47,7 @@ export class AiImageProcessor extends WorkerHost {
       );
 
       return data;
-    } catch (e) {
+    } catch (e: unknown) {
       this.logger.error(`AI image analysis failed: ${e.message}`);
     }
   }

@@ -58,8 +58,9 @@ export class ModerationProcessor extends WorkerHost {
           `User ${data.senderId} restricted after delayed processing`,
         );
       }
-    } catch (error) {
-      this.logger.error(`Delayed processing failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Delayed processing failed: ${message}`);
     }
   }
 

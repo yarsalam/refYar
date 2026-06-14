@@ -18,7 +18,7 @@ export class AiFeedbackProcessor extends WorkerHost {
         `Sent feedback ${feedback.id} to ML service: ${res.status}`,
       );
       return res.data;
-    } catch (e) {
+    } catch (e: unknown) {
       this.logger.error(`ML feedback send failed: ${e.message}`);
       throw e;
     }

@@ -75,7 +75,7 @@ export class ModerationService {
       }
 
       return { ...result, action: this.determineAction(result) };
-    } catch (error) {
+    } catch (error: unknown) {
       this.failureCount++;
       if (this.failureCount >= this.FAILURE_THRESHOLD) {
         this.openCircuit();
@@ -273,7 +273,7 @@ export class ModerationService {
       });
 
       await this.logRepo.save(log);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to save moderation log: ${error.message}`);
     }
   }

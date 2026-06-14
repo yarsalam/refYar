@@ -26,8 +26,9 @@ export class AssistantClientService {
         }),
       );
       return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to analyze user: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to analyze user: ${message}`);
       return null;
     }
   }
@@ -38,8 +39,9 @@ export class AssistantClientService {
         this.httpService.get(`${this.aiUrl}/api/assistant/advice/${userId}`),
       );
       return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to get advice: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to get advice: ${message}`);
       return null;
     }
   }

@@ -170,7 +170,7 @@ export class RevenueAttributionService {
         }),
       );
       return response.data.predicted_ltv;
-    } catch (e) {
+    } catch (e: unknown) {
       this.logger.error(`ML prediction failed, using fallback. ${e.message}`);
       // fallback به روش قبلی
       const user = await this.userRepo.findOne({ where: { id: userId } });

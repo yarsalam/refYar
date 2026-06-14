@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserEventService } from '../../user-event/user-event.service';
@@ -15,9 +15,7 @@ export class UserSEOSignalsService {
     @InjectRepository(SEOMetrics)
     private readonly metricsRepo: Repository<SEOMetrics>, // ✅ دکوراتور صحیح
 
-    @Inject(forwardRef(() => PhaseService))
     private readonly phaseService: PhaseService,
-
     private readonly userEventService: UserEventService,
     private readonly metricsService: UserMetricsService,
     private readonly interactionsService: InteractionsService,
@@ -53,9 +51,10 @@ export class UserSEOSignalsService {
       });
 
       return signals;
-    } catch (error) {
-      this.logger.error(`User signals analysis failed: ${error.message}`);
-      return null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Competitor analysis failed: ${message}`);
+      return this.analyzeUserSignals();
     }
   }
 

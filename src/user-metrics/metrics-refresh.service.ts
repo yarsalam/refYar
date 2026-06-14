@@ -21,7 +21,7 @@ export class MetricsRefreshService {
         REFRESH MATERIALIZED VIEW CONCURRENTLY user_daily_metrics;
       `);
       this.logger.log('Daily metrics refreshed successfully');
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to refresh daily metrics', error);
     }
   }

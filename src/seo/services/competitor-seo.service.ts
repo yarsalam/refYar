@@ -50,8 +50,9 @@ export class CompetitorSEOService {
         opportunities,
         timestamp: new Date(),
       };
-    } catch (error) {
-      this.logger.error(`Competitor analysis failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Competitor analysis failed: ${message}`);
       return this.getMockCompetitorData();
     }
   }

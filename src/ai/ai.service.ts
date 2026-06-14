@@ -46,8 +46,9 @@ export class AiService {
         this.httpService.post(`${this.baseUrl}/embed`, { text }),
       );
       return res.data;
-    } catch (error) {
-      this.logger.error('embedText failed', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('embedText failed', message);
       throw new Error('AI service unavailable');
     }
   }
@@ -58,8 +59,9 @@ export class AiService {
         this.httpService.post(`${this.baseUrl}/compare`, { text1, text2 }),
       );
       return res.data;
-    } catch (error) {
-      this.logger.error('compareTexts failed', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('compareText failed', message);
       throw new Error('AI service unavailable');
     }
   }
@@ -70,8 +72,9 @@ export class AiService {
         this.httpService.post(`${this.baseUrl}/predict`, data),
       );
       return res.data;
-    } catch (error) {
-      this.logger.error('predict failed', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('predict failed', message);
       throw new Error('AI service unavailable');
     }
   }
@@ -85,7 +88,7 @@ export class AiService {
         }),
       );
       return res.data;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('train failed', error.message);
       throw new Error('AI service unavailable');
     }
@@ -97,7 +100,7 @@ export class AiService {
         this.httpService.get(`${this.baseUrl}/health`),
       );
       return res.data;
-    } catch (error) {
+    } catch (error: unknown) {
       return { status: 'down' };
     }
   }
@@ -108,8 +111,9 @@ export class AiService {
         this.httpService.post(`${this.baseUrl}/similarity-by-id`, { idA, idB }),
       );
       return res.data;
-    } catch (error) {
-      this.logger.error('compareById failed', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('compareById failed', message);
       throw new Error('AI service unavailable');
     }
   }

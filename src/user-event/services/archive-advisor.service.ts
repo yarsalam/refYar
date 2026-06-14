@@ -203,9 +203,11 @@ export class ArchiveAdvisorService {
         destinationPath: `s3://archive/${request.tableName}/${request.olderThan.toISOString()}`,
         archiveSizeMb: request.estimatedSizeMb * 0.3,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       request.status = ArchiveStatus.FAILED;
-      request.metadata = { error: error.message };
+      request.metadata = {
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
 
     await this.requestRepo.save(request);
@@ -254,7 +256,7 @@ export class ArchiveAdvisorService {
 
       const bytes = result[0]?.db_size_bytes || 0;
       return bytes / (1024 * 1024); // تبدیل به مگابایت
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to calculate DB size: ${error}`);
       return 0;
     }
@@ -283,7 +285,7 @@ export class ArchiveAdvisorService {
   //     }
 
   //     return stats;
-  //   } catch (error) {
+  //   } catch (error: unknown) {
   //     this.logger.error(`Failed to get table stats: ${error}`);
   //     return {};
   //   }

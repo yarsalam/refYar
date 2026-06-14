@@ -64,8 +64,9 @@ export class PromotionEngineService {
 
       if (best.score < 0.3) return { variant: null, score: best.score };
       return { variant: best.variant, score: best.score };
-    } catch (error) {
-      this.logger.error(`Error in ML decision: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error in ML decision: ${message}`);
       return this.ruleBasedFallback(userId, allowedVariants);
     }
   }

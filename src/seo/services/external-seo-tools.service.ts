@@ -59,10 +59,10 @@ export class ExternalSEOToolsService {
       await this.redis.expire(cacheKey, 3600);
 
       return response.data;
-    } catch (error) {
-      this.logger.error(`Search Console API failed: ${error.message}`);
-      // 5. fallback با داده‌های قدیمی
-      return this.getMockSearchConsoleData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getMocSearchConsoleData API failed: ${message}`);
+      return this.getSearchConsoleData();
     }
   }
 
@@ -89,9 +89,10 @@ export class ExternalSEOToolsService {
         ),
       );
       return response.data;
-    } catch (error) {
-      this.logger.error(`Analytics API failed: ${error.message}`);
-      return this.getMockAnalyticsData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getAnalyticsData API failed: ${message}`);
+      return this.getAnalyticsData();
     }
   }
 
@@ -118,9 +119,10 @@ export class ExternalSEOToolsService {
         nofollow: response.data.nofollow || 0,
         topDomains: response.data.top_domains?.slice(0, 10) || [],
       };
-    } catch (error) {
-      this.logger.error(`Backlink API failed: ${error.message}`);
-      return this.getMockBacklinkData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getMockBacklinjData API failed: ${message}`);
+      return this.getBacklinkData();
     }
   }
 
@@ -155,8 +157,9 @@ export class ExternalSEOToolsService {
         linkingDomains: response.data[0]?.linking_domains || 0,
         backlinks: response.data[0]?.backlinks || 0,
       };
-    } catch (error) {
-      this.logger.error(`Moz API failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getMockMozData API failed: ${message}`);
       return this.getMockMozData();
     }
   }
@@ -176,9 +179,10 @@ export class ExternalSEOToolsService {
         }),
       );
       return response.data;
-    } catch (error) {
-      this.logger.error(`SEMrush API failed: ${error.message}`);
-      return this.getMockSemrushData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getSemrushData API failed: ${message}`);
+      return this.getSemrushData();
     }
   }
 
@@ -204,8 +208,10 @@ export class ExternalSEOToolsService {
         dofollow: response.data.dofollow || 0,
         nofollow: response.data.nofollow || 0,
       };
-    } catch (error) {
-      return this.getMockBacklinkData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getMockBacklinkWatchData API failed: ${message}`);
+      return this.getBacklinkWatchData();
     }
   }
 
@@ -320,9 +326,10 @@ export class ExternalSEOToolsService {
 
       await this.redis.set(cacheKey, results, 'EX', 86400); // 1 روز کش
       return JSON.parse(results);
-    } catch (error) {
-      this.logger.error(`Google Trends failed: ${error.message}`);
-      return null;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`getGoogleTrends API failed: ${message}`);
+      return this.getGoogleTrends();
     }
   }
 
@@ -366,9 +373,10 @@ export class ExternalSEOToolsService {
 
       await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
       return result;
-    } catch (error) {
-      this.logger.error(`SerpAPI failed: ${error.message}`);
-      return this.getMockSerpData();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`XXX API failed: ${message}`);
+      return this.getLiveSerpRanking();
     }
   }
 

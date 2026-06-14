@@ -55,7 +55,7 @@ export class DailyMetricsService {
       );
 
       this.logger.log(`Daily metrics updated for ${dateStr}`);
-    } catch (err) {
+    } catch (err: unknown) {
       this.logger.error('Failed to update daily metrics', err);
     }
   }

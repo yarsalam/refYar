@@ -80,7 +80,7 @@ export class MessageService {
     if (!dto.is_free) {
       try {
         await this.creditsService.consume(dto.from_id, 1, 'send_message');
-      } catch (error) {
+      } catch (error: unknown) {
         if (error instanceof PaywallException) throw error;
         throw new Error('خطا در بررسی اعتبار');
       }

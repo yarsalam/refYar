@@ -40,9 +40,11 @@ export class PhaseRecalcService {
         batch.map(async (user) => {
           try {
             await this.phaseService.calculate(user.id);
-          } catch (err) {
+          } catch (error: unknown) {
+            const message =
+              error instanceof Error ? error.message : String(error);
             this.logger.error(
-              `Recalc failed for user ${user.id}: ${err.message}`,
+              `Phase calculation failed for user ${user.id}: ${message}`,
             );
           }
         }),

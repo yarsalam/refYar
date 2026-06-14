@@ -16,13 +16,16 @@ export class AutoExecutorService {
     if (rec.title.includes('meta description')) {
       const cmsUrl = process.env.CMS_API_URL + '/update-meta';
       try {
-        await firstValueFrom(this.httpService.post(cmsUrl, {
-          page: rec.metrics?.page,
-          description: rec.metrics?.newDescription
-        }));
+        await firstValueFrom(
+          this.httpService.post(cmsUrl, {
+            page: rec.metrics?.page,
+            description: rec.metrics?.newDescription,
+          }),
+        );
         this.logger.log(`Meta description updated for ${rec.metrics?.page}`);
-      } catch (err) {
-        this.logger.error(`Failed to execute: ${err.message}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Failed to execute: ${msg}`);
       }
     }
 

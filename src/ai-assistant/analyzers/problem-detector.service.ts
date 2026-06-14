@@ -7,22 +7,12 @@ import { UserMetricsService } from '../../user-metrics/user-metrics.service';
 import { PersonalityService } from '../../personality/personality.service';
 import { FeedBuilderService } from '../../feed/feed.service';
 import { TicketService } from 'src/ai-support/services/ticket.service';
-
-export interface UserProblem {
-  category:
-    | 'profile'
-    | 'image'
-    | 'engagement'
-    | 'payment'
-    | 'personality'
-    | 'phase'
-    | 'technical';
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  description: string;
-  reason: string;
-  solution: string;
-  impact: string;
-}
+import { UserProblem } from '../types/user-problem.interface';
+import { ProblemDetectorPhase } from '../types/problem-detector-phase.interface';
+import { UserImageAnalysis } from '../types/user-image-analysis.interface';
+import { InteractionAnalysis } from '../types/interaction-analysis.interface';
+import { UserMetricsSnapshot } from '../types/user-metrics-snapshot.interface';
+import { PersonalityProfile } from '../types/personality-profile.interface';
 
 @Injectable()
 export class ProblemDetectorService {
@@ -99,8 +89,8 @@ export class ProblemDetectorService {
 
   private async detectProfileProblems(
     userId: number,
-    phase: any,
-    images: any[],
+    phase: ProblemDetectorPhase,
+    images: UserImageAnalysis[],
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
 
@@ -142,7 +132,7 @@ export class ProblemDetectorService {
 
   private async detectImageProblems(
     userId: number,
-    images: any[],
+    images: UserImageAnalysis[],
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
 
@@ -181,11 +171,11 @@ export class ProblemDetectorService {
     return problems;
   }
 
-  private async detectEngagementProblems(
+  private detectEngagementProblems(
     userId: number,
-    interactions: any[],
-    visitors: any[],
-    metrics: any,
+    interactions: InteractionAnalysis[],
+    visitors: unknown[],
+    metrics: UserMetricsSnapshot,
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
 
@@ -234,8 +224,8 @@ export class ProblemDetectorService {
 
   private async detectPersonalityProblems(
     userId: number,
-    personality: any,
-    interactions: any[],
+    personality: PersonalityProfile,
+    interactions: InteractionAnalysis[],
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
 
@@ -273,8 +263,8 @@ export class ProblemDetectorService {
   }
 
   private async detectPhaseProblems(
-    phase: any,
-    metrics: any,
+    phase: ProblemDetectorPhase,
+    metrics: UserMetricsSnapshot,
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
 

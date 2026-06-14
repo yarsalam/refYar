@@ -31,7 +31,7 @@ export class SocialListenerService {
           source: channel,
           timestamp: new Date(),
         });
-      } catch (e) {
+      } catch (e: unknown) {
         this.logger.error(`Telegram scan failed for ${channel}: ${e.message}`);
       }
     }

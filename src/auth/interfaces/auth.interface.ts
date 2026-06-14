@@ -7,3 +7,9 @@ export interface verifyCodeDto {
   phone: string;
   code: string;
 }
+
+export interface JwtPayload {
+  sub: number;
+  phone: string;
+  temporary?: boolean;
+}

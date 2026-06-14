@@ -89,8 +89,12 @@ export class VerificationService {
         confidence: result.confidence,
         message: result.message,
       };
-    } catch (error) {
-      this.logger.error(`Verification failed: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Verification failed: ${message}`,
+        error instanceof Error ? error.stack : undefined,
+      );
       return {
         success: false,
         message: 'خطا در انجام تأیید',

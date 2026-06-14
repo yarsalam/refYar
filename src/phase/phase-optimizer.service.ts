@@ -35,20 +35,6 @@ export class PhaseOptimizerService {
 
     const userIdsWithPurchase = new Set(payments.map((p) => p.userId));
 
-    // محاسبه همبستگی واقعی‌تر: نسبت کاربران خریدار به کل کاربران در هر segment
-    const weightKeys = [
-      'matches',
-      'messages',
-      'views',
-      'retentionDays',
-      'pastPayments',
-      'boostUsed',
-      'cityUsers',
-      'learningScore',
-      'profileCompleteness',
-      'sentimentScore',
-    ];
-
     const buyerScores: number[] = [];
     const nonBuyerScores: number[] = [];
 

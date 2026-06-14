@@ -275,7 +275,7 @@ export class ProfileVisitorsService {
         userId,
         visitorIds,
       );
-    } catch (err) {
+    } catch (err: unknown) {
       this.logger.error('Failed to get relations for visitors', err);
     }
 

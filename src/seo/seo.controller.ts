@@ -84,7 +84,7 @@ export class SEOController {
           this.httpService.get(`${aiUrl}/api/forecast`),
         );
         forecast = response.data;
-      } catch (error) {
+      } catch (error: unknown) {
         // ignore
       }
     }

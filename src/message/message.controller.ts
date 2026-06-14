@@ -31,7 +31,7 @@ export class MessageController {
     dto.from_id = userId;
     try {
       return await this.messageService.sendMessage(dto);
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof PaywallException) {
         throw new HttpException(
           {

@@ -110,7 +110,7 @@ export class ContentOpportunityService {
             });
           }
         }
-      } catch (e) {
+      } catch (e: unknown) {
         // ignore
       }
     });
@@ -155,7 +155,7 @@ export class ContentOpportunityService {
             });
           }
         }
-      } catch (e) {
+      } catch (e: unknown) {
         // ignore
       }
     });
@@ -170,6 +170,7 @@ export class ContentOpportunityService {
     // TODO: از Google Search Console API
     return ['همسریابی آنلاین', 'ازدواج اینترنتی', 'همدم'];
   }
+
   async generateHighIntentContent() {
     try {
       const highIntentKeywords = await this.analyticsConnection.query(`
@@ -197,11 +198,10 @@ export class ContentOpportunityService {
         totalRevenue: parseFloat(k.total_revenue),
         priority: parseFloat(k.avg_ltv) * parseInt(k.users),
       }));
-    } catch (error) {
-      this.logger.error(
-        `Failed to generate high intent content: ${error.message}`,
-      );
-      return [];
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Competitor analysis failed: ${message}`);
+      return this.generateHighIntentContent();
     }
   }
 

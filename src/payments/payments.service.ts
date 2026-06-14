@@ -46,7 +46,6 @@ export class PaymentsService {
         }
 
         if (item.type === 'boost') {
-          // رفع باگ: فقط grant — فعال‌سازی توسط خود کاربر انجام می‌شود
           await this.boostService.grantInstant(userId, item.amount);
         }
 
@@ -68,13 +67,15 @@ export class PaymentsService {
           productType: bundleCode,
         });
         await this.featureStore.learnFeatureWeights(userId, 'purchase');
-      } catch (e) {
-        this.logger.warn(`یادگیری خرید ناموفق بود: ${e.message}`);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        this.logger.warn(`یادگیری خرید ناموفق بود: ${msg}`);
       }
 
       return { success: true };
-    } catch (error) {
-      this.logger.error(`grantBundle failed: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`grantBundle failed: ${message}`);
       throw error;
     }
   }

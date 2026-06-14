@@ -34,8 +34,9 @@ export class NotificationGateway
       client.join(`user_${userId}`);
       client.data.userId = userId;
       this.logger.log(`User ${userId} connected to notifications`);
-    } catch (error) {
-      this.logger.warn('Connection failed: ' + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn('Connection failed: ' + message);
       client.disconnect();
     }
   }

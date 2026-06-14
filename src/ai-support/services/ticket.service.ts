@@ -210,8 +210,9 @@ export class TicketService {
         ),
       );
       return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to get AI analysis: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to get AI analysis: ${message}`);
       return null;
     }
   }
@@ -222,8 +223,9 @@ export class TicketService {
         this.httpService.get(`${this.aiServiceUrl}/api/seo-insights`),
       );
       return response.data;
-    } catch (error) {
-      this.logger.error(`Failed to get SEO insights: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to get AI seoInsights: ${message}`);
       return null;
     }
   }

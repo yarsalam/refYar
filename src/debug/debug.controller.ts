@@ -25,7 +25,7 @@ export class DebugController {
         candidates,
         suggestions,
       };
-    } catch (e) {
+    } catch (e: unknown) {
       return { error: e.message, stack: e.stack };
     }
   }
@@ -35,7 +35,7 @@ export class DebugController {
     try {
       const feed = await this.feedService.buildFeed(userId);
       return { feedLength: feed.length, feed };
-    } catch (e) {
+    } catch (e: unknown) {
       return { error: e.message, stack: e.stack };
     }
   }
@@ -51,7 +51,7 @@ export class DebugController {
         targetId,
       );
       return rel;
-    } catch (e) {
+    } catch (e: unknown) {
       return { error: e.message, stack: e.stack };
     }
   }

@@ -137,7 +137,7 @@ export class AdminApiSeoController {
   //       `${this.aiSeoUrl}/competitor-changes`,
   //     );
   //     return data;
-  //   } catch (error) {
+  //   } catch (error: unknown) {
   //     this.logger.error('Failed to fetch competitor changes', error);
   //     return [];
   //   }
@@ -150,7 +150,7 @@ export class AdminApiSeoController {
   //       `${this.aiSeoUrl}/serp-features?keyword=${encodeURIComponent(keyword)}`,
   //     );
   //     return data;
-  //   } catch (error) {
+  //   } catch (error: unknown) {
   //     this.logger.error('Failed to fetch SERP features', error);
   //     return [];
   //   }
@@ -164,7 +164,7 @@ export class AdminApiSeoController {
   async getKeywordsRanking() {
     try {
       return await this.seoService.discoverBehavioralKeywords();
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('SEO keywords ranking failed, returning mock', error);
       // داده‌های Mock برای نمایش در پنل
       return [
@@ -182,7 +182,7 @@ export class AdminApiSeoController {
         `${this.aiSeoUrl}/competitor-changes`,
       );
       return data;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Competitor changes fetch failed', error);
       return [
         { name: 'رقیب ۱', change: '+12%' },
@@ -198,7 +198,7 @@ export class AdminApiSeoController {
         `${this.aiSeoUrl}/serp-features?keyword=${encodeURIComponent(keyword)}`,
       );
       return data;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('SERP features fetch failed', error);
       return []; // یا یک Mock مناسب
     }

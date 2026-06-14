@@ -64,8 +64,9 @@ export class PromotionExposureService {
       const blockKey = `promo:block:${userId}:${variant}`;
       const blocked = await this.redis.get(blockKey);
       return !blocked;
-    } catch (error) {
-      this.logger.error(`Error in canShow: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error in canShow: ${message}`);
       return true;
     }
   }
@@ -78,8 +79,9 @@ export class PromotionExposureService {
       await this.redis.expire(dailyKey, 86400);
       const lastShownKey = `promo:last:${userId}:${variant}`;
       await this.redis.set(lastShownKey, Date.now().toString(), 'EX', 86400);
-    } catch (error) {
-      this.logger.error(`Error in trackImpression: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error in trackImpression: ${message}`);
     }
   }
 
@@ -125,8 +127,10 @@ export class PromotionExposureService {
           })
           .pipe(timeout(3000)),
       );
-    } catch (error) {
-      this.logger.error(`Error in trackDismiss: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error in trackDismiss: ${message}`);
+      return true;
     }
   }
 
