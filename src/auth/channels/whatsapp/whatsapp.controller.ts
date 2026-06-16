@@ -19,7 +19,6 @@ export class WhatsAppController {
   /** 2) واتساپ پیام را POST می‌کند اینجا */
   @Post('webhook')
   async webhook(@Body() body: { sender: string; text: string }, @Req() req) {
-
     if (!body.sender || !body.text) return 'NO_DATA';
 
     await this.whatsappService.handleIncomingMessage(body.sender, body.text);

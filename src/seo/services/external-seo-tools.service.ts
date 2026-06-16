@@ -14,59 +14,39 @@ export class ExternalSEOToolsService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  // 1️⃣ Google Search Console API (رایگان)
   async getSearchConsoleData(domain: string, days = 30) {
     const cacheKey = `search_console:${domain}:${days}`;
-
-    // 1. چک کش
     const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
+    if (cached) return JSON.parse(cached);
 
-    // 2. Rate limiting
     const rateKey = `rate:search_console:${domain}`;
     const calls = await this.redis.incr(rateKey);
-    if (calls === 1) {
-      await this.redis.expire(rateKey, 86400); // روزانه
-    }
+    if (calls === 1) await this.redis.expire(rateKey, 86400);
+    if (calls > 100) throw new Error('Rate limit exceeded');
 
-    if (calls > 100) {
-      // محدودیت روزانه
-      throw new Error('Rate limit exceeded');
-    }
-
-    // 3. درخواست واقعی
     try {
       const response = await firstValueFrom(
         this.httpService.post(
           `https://searchconsole.googleapis.com/v1/urlInspection/index:inspect`,
+          { inspectionUrl: domain, siteUrl: domain },
           {
-            inspectionUrl: domain,
-            siteUrl: domain,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.GOOGLE_API_KEY}`,
-            },
+            headers: { Authorization: `Bearer ${process.env.GOOGLE_API_KEY}` },
             timeout: 10000,
           },
         ),
       );
-
-      // 4. کش برای 1 ساعت
       await this.redis.set(cacheKey, JSON.stringify(response.data));
       await this.redis.expire(cacheKey, 3600);
-
       return response.data;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getMocSearchConsoleData API failed: ${message}`);
-      return this.getSearchConsoleData();
+      this.logger.error(
+        'Search Console API failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getMockSearchConsoleData();
     }
   }
 
-  // 2️⃣ Google Analytics 4 API (رایگان)
   async getAnalyticsData(propertyId: string, days = 30) {
     try {
       const response = await firstValueFrom(
@@ -81,37 +61,32 @@ export class ExternalSEOToolsService {
             ],
           },
           {
-            headers: {
-              Authorization: `Bearer ${process.env.GOOGLE_API_KEY}`,
-            },
+            headers: { Authorization: `Bearer ${process.env.GOOGLE_API_KEY}` },
             timeout: 10000,
           },
         ),
       );
       return response.data;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getAnalyticsData API failed: ${message}`);
-      return this.getAnalyticsData();
+      this.logger.error(
+        'Analytics API failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getMockAnalyticsData();
     }
   }
 
-  // 3️⃣ Backlink Checker (رایگان - نمونه)
   async getBacklinkData(domain: string) {
     try {
-      // استفاده از API رایگان backlinkwatch.com
       const response = await firstValueFrom(
         this.httpService.get(
           `https://api.backlinkwatch.com/v2/?url=${domain}&mode=domain`,
           {
-            headers: {
-              'x-api-key': process.env.BACKLINK_API_KEY,
-            },
+            headers: { 'x-api-key': process.env.BACKLINK_API_KEY },
             timeout: 10000,
           },
         ),
       );
-
       return {
         totalBacklinks: response.data.total_backlinks || 0,
         referringDomains: response.data.ref_domains || 0,
@@ -120,26 +95,23 @@ export class ExternalSEOToolsService {
         topDomains: response.data.top_domains?.slice(0, 10) || [],
       };
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getMockBacklinjData API failed: ${message}`);
-      return this.getBacklinkData();
+      this.logger.error(
+        'Backlink API failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getMockBacklinkData();
     }
   }
 
-  // 4️⃣ Moz API (بخش رایگان - 100 داده اول)
   async getMozData(domain: string) {
     try {
-      // Moz API - 100 درخواست رایگان در ماه
       const auth = Buffer.from(
         `${process.env.MOZ_ACCESS_ID}:${process.env.MOZ_SECRET_KEY}`,
       ).toString('base64');
-
       const response = await firstValueFrom(
         this.httpService.post(
           'https://lsapi.seomoz.com/v2/url_metrics',
-          {
-            targets: [domain],
-          },
+          { targets: [domain] },
           {
             headers: {
               Authorization: `Basic ${auth}`,
@@ -149,7 +121,6 @@ export class ExternalSEOToolsService {
           },
         ),
       );
-
       return {
         domainAuthority: response.data[0]?.domain_authority || 0,
         pageAuthority: response.data[0]?.page_authority || 0,
@@ -158,13 +129,14 @@ export class ExternalSEOToolsService {
         backlinks: response.data[0]?.backlinks || 0,
       };
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getMockMozData API failed: ${message}`);
+      this.logger.error(
+        'Moz API failed',
+        error instanceof Error ? error.message : String(error),
+      );
       return this.getMockMozData();
     }
   }
 
-  // 5️⃣ SEMrush API (محدود)
   async getSemrushData(domain: string) {
     try {
       const response = await firstValueFrom(
@@ -172,7 +144,7 @@ export class ExternalSEOToolsService {
           params: {
             type: 'domain_rank',
             key: process.env.SEMRUSH_API_KEY,
-            domain: domain,
+            domain,
             database: 'us',
           },
           timeout: 10000,
@@ -180,28 +152,25 @@ export class ExternalSEOToolsService {
       );
       return response.data;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getSemrushData API failed: ${message}`);
-      return this.getSemrushData();
+      this.logger.error(
+        'SEMrush API failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getMockSemrushData();
     }
   }
 
-  // 6️⃣ Ahrefs-like رایگان (backlinkwatch)
   async getBacklinkWatchData(domain: string) {
     try {
-      // backlinkwatch.com API رایگان
       const response = await firstValueFrom(
         this.httpService.get(
           `https://api.backlinkwatch.com/v1/?url=${domain}&mode=domain`,
           {
-            headers: {
-              'x-api-key': process.env.BACKLINK_API_KEY,
-            },
+            headers: { 'x-api-key': process.env.BACKLINK_API_KEY },
             timeout: 10000,
           },
         ),
       );
-
       return {
         backlinks: response.data.total_backlinks || 0,
         referringDomains: response.data.ref_domains || 0,
@@ -209,27 +178,23 @@ export class ExternalSEOToolsService {
         nofollow: response.data.nofollow || 0,
       };
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getMockBacklinkWatchData API failed: ${message}`);
-      return this.getBacklinkWatchData();
+      this.logger.error(
+        'BacklinkWatch API failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getMockBacklinkData();
     }
   }
 
-  // 7️⃣ RivalSee (ابزار جدید AI SEO)
-  async getRivalSeeData(domain: string) {
-    // TODO: اضافه کردن API RivalSee
+  async getRivalSeeData(_domain: string) {
     return this.getMockCompetitorData();
   }
 
-  // 8️⃣ Appark (تحلیل رقبا)
-  async getApparkData(appName: string) {
-    // TODO: اضافه کردن API Appark
+  async getApparkData(_appName: string) {
     return this.getMockCompetitorData();
   }
 
-  // 9️⃣ DeepSeek (ردیابی رتبه)
   async getDeepSeekRankings(keyword: string) {
-    // TODO: اضافه کردن API DeepSeek
     return {
       keyword,
       position: Math.floor(Math.random() * 50) + 1,
@@ -237,7 +202,7 @@ export class ExternalSEOToolsService {
     };
   }
 
-  // ========== Mock Data (برای وقتی API در دسترس نیست) ==========
+  // ───── Mock Data ─────
   private getMockBacklinkData() {
     return {
       totalBacklinks: 1245,
@@ -253,7 +218,6 @@ export class ExternalSEOToolsService {
       ],
     };
   }
-
   private getMockMozData() {
     return {
       domainAuthority: 45,
@@ -263,7 +227,6 @@ export class ExternalSEOToolsService {
       backlinks: 2345,
     };
   }
-
   private getMockSearchConsoleData() {
     return {
       clicks: 12500,
@@ -273,7 +236,6 @@ export class ExternalSEOToolsService {
       topQueries: ['همسریابی', 'دوستیابی', 'ازدواج آسان'],
     };
   }
-
   private getMockAnalyticsData() {
     return {
       users: 15000,
@@ -283,7 +245,6 @@ export class ExternalSEOToolsService {
       bounceRate: 42,
     };
   }
-
   private getMockSemrushData() {
     return {
       organic_keywords: 1250,
@@ -292,7 +253,6 @@ export class ExternalSEOToolsService {
       paid_traffic: 2300,
     };
   }
-
   private getMockCompetitorData() {
     return {
       competitors: [
@@ -307,35 +267,32 @@ export class ExternalSEOToolsService {
     };
   }
 
-  async getKeywordDifficulty(keyword: string): Promise<number> {
+  async getKeywordDifficulty(_keyword: string): Promise<number> {
     return 0;
   }
 
   async getGoogleTrends(keyword: string, geo: string = 'IR'): Promise<any> {
     try {
-      // استفاده از کش برای جلوگیری از Rate Limit
       const cacheKey = `trends:${keyword}:${geo}`;
       const cached = await this.redis.get(cacheKey);
       if (cached) return JSON.parse(cached);
 
       const results = await googleTrends.interestOverTime({
-        keyword: keyword,
-        geo: geo,
+        keyword,
+        geo,
         hl: 'fa',
       });
-
-      await this.redis.set(cacheKey, results, 'EX', 86400); // 1 روز کش
+      await this.redis.set(cacheKey, results, 'EX', 86400);
       return JSON.parse(results);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`getGoogleTrends API failed: ${message}`);
-      return this.getGoogleTrends();
+      this.logger.error(
+        'Google Trends failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return [];
     }
   }
 
-  /**
-   * 🚀 اصلاح شده: دریافت رتبه واقعی از SerpAPI (Accounts رایگان دارد)
-   */
   async getLiveSerpRanking(keyword: string, domain: string): Promise<any> {
     try {
       const cacheKey = `serp:${keyword}`;
@@ -350,13 +307,7 @@ export class ExternalSEOToolsService {
 
       const response = await firstValueFrom(
         this.httpService.get(`https://serpapi.com/search.json`, {
-          params: {
-            q: keyword,
-            api_key: apiKey,
-            gl: 'ir',
-            hl: 'fa',
-            num: 20,
-          },
+          params: { q: keyword, api_key: apiKey, gl: 'ir', hl: 'fa', num: 20 },
         }),
       );
 
@@ -364,7 +315,6 @@ export class ExternalSEOToolsService {
       const position = data.organic_results?.findIndex((r) =>
         r.link?.includes(domain),
       );
-
       const result = {
         position: position !== -1 ? position + 1 : 50,
         totalResults: data.search_information?.total_results,
@@ -374,15 +324,17 @@ export class ExternalSEOToolsService {
       await this.redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
       return result;
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`XXX API failed: ${message}`);
-      return this.getLiveSerpRanking();
+      this.logger.error(
+        'SerpAPI failed',
+        error instanceof Error ? error.message : String(error),
+      );
+      return this.getMockSerpData();
     }
   }
 
   async getKeywordGap(domain: string, competitors: string[]): Promise<any> {
     const keywords = ['همسریابی', 'دوستیابی', 'ازدواج'];
-    const result = {};
+    const result: any = {};
 
     for (const kw of keywords) {
       const ourRank = await this.getLiveSerpRanking(kw, domain);
@@ -393,7 +345,6 @@ export class ExternalSEOToolsService {
         result[kw][comp] = compRank?.position;
       }
     }
-
     return result;
   }
 

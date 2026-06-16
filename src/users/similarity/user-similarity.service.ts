@@ -67,7 +67,7 @@ export class UserSimilarityService {
     );
 
     // حذف بلاک‌شده‌ها
-    let filteredUsers = recentUsers.filter(
+    const filteredUsers = recentUsers.filter(
       (u) => !relationsMap.get(u.id)?.isBlocked,
     );
     if (filteredUsers.length === 0) return [];

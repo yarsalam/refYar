@@ -5,7 +5,6 @@ import { InteractionsService } from '../../interaction/interaction.service';
 import { ProfileVisitorsService } from '../../profile-visitors/profile-visitors.service';
 import { UserMetricsService } from '../../user-metrics/user-metrics.service';
 import { PersonalityService } from '../../personality/personality.service';
-import { FeedBuilderService } from '../../feed/feed.service';
 import { TicketService } from 'src/ai-support/services/ticket.service';
 import { UserProblem } from '../types/user-problem.interface';
 import { ProblemDetectorPhase } from '../types/problem-detector-phase.interface';
@@ -13,6 +12,7 @@ import { UserImageAnalysis } from '../types/user-image-analysis.interface';
 import { InteractionAnalysis } from '../types/interaction-analysis.interface';
 import { UserMetricsSnapshot } from '../types/user-metrics-snapshot.interface';
 import { PersonalityProfile } from '../types/personality-profile.interface';
+import { FeedAssemblerService } from 'src/feed/services/feed-assembler.service';
 
 @Injectable()
 export class ProblemDetectorService {
@@ -26,7 +26,7 @@ export class ProblemDetectorService {
     private readonly profileVisitorsService: ProfileVisitorsService,
     private readonly userMetricsService: UserMetricsService,
     private readonly personalityService: PersonalityService,
-    private readonly feedService: FeedBuilderService,
+    private readonly feedAssembler: FeedAssemblerService,
     private readonly ticketService: TicketService,
   ) {}
 
@@ -38,8 +38,8 @@ export class ProblemDetectorService {
       images,
       interactions,
       visitors,
-      metrics,
-      personality,
+      rawMetrics,
+      rawPersonality,
       feed,
       supportTickets,
     ] = await Promise.all([
@@ -49,37 +49,59 @@ export class ProblemDetectorService {
       this.profileVisitorsService.getProfileVisitors(userId).catch(() => []),
       this.userMetricsService.buildExtraMetrics(userId).catch(() => null),
       this.personalityService.analyzePersonality(userId).catch(() => null),
-      this.feedService.getUserFeedQuality(userId).catch(() => null),
+      this.feedAssembler.buildFeed(userId, { limit: 5 }).catch(() => []),
       this.ticketService.getUserTickets(userId).catch(() => []),
     ]);
 
-    const profileProblems = await this.detectProfileProblems(
-      userId,
-      phase,
-      images,
+    // مقدار پیش‌فرض برای phase (ممکن است null باشد)
+    const safePhase: ProblemDetectorPhase = {
+      isCompleted: false, // مقدار پیش‌فرض
+      city: null,
+      bio: null,
+      phase: 'cold' as const,
+      everPaid: false,
+      suggestedActions: [],
+      ...phase, // فیلدهای واقعی (مثل phase و score) روی پیش‌فرض‌ها نوشته می‌شوند
+    } as ProblemDetectorPhase;
+
+    // تبدیل عکس‌ها به UserImageAnalysis[]
+    const userImages: UserImageAnalysis[] = images.map((img) => ({
+      id: img.id,
+      url: img.url,
+      qualityScore: img.qualityScore ?? 0,
+    }));
+
+    // مقدار پیش‌فرض برای metrics و personality
+    const metrics: UserMetricsSnapshot = {
+      daysSinceSignup: (rawMetrics as any)?.daysSinceSignup ?? 0,
+      lastPurchaseDays: (rawMetrics as any)?.lastPurchaseDays ?? 0,
+    };
+
+    const personality: PersonalityProfile =
+      (rawPersonality as PersonalityProfile | null) ?? {
+        ocean: { extraversion: 0.5 },
+      };
+
+    problems.push(
+      ...(await this.detectProfileProblems(userId, safePhase, userImages)),
     );
-    problems.push(...profileProblems);
-
-    const imageProblems = await this.detectImageProblems(userId, images);
-    problems.push(...imageProblems);
-
-    const engagementProblems = await this.detectEngagementProblems(
-      userId,
-      interactions,
-      visitors,
-      metrics,
+    problems.push(...(await this.detectImageProblems(userId, userImages)));
+    problems.push(
+      ...(await this.detectEngagementProblems(
+        userId,
+        interactions,
+        visitors,
+        metrics,
+      )),
     );
-    problems.push(...engagementProblems);
-
-    const personalityProblems = await this.detectPersonalityProblems(
-      userId,
-      personality,
-      interactions,
+    problems.push(
+      ...(await this.detectPersonalityProblems(
+        userId,
+        personality,
+        interactions,
+      )),
     );
-    problems.push(...personalityProblems);
-
-    const phaseProblems = await this.detectPhaseProblems(phase, metrics);
-    problems.push(...phaseProblems);
+    problems.push(...(await this.detectPhaseProblems(safePhase, metrics)));
 
     return problems.sort((a, b) => {
       const severityWeight = { critical: 4, high: 3, medium: 2, low: 1 };
@@ -88,13 +110,12 @@ export class ProblemDetectorService {
   }
 
   private async detectProfileProblems(
-    userId: number,
+    _userId: number,
     phase: ProblemDetectorPhase,
-    images: UserImageAnalysis[],
+    _images: UserImageAnalysis[],
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
-
-    if (!phase?.isCompleted) {
+    if (!phase.isCompleted) {
       problems.push({
         category: 'profile',
         severity: 'high',
@@ -104,8 +125,7 @@ export class ProblemDetectorService {
         impact: '۵ برابر افزایش بازدید پروفایل',
       });
     }
-
-    if (!phase?.city) {
+    if (!phase.city) {
       problems.push({
         category: 'profile',
         severity: 'medium',
@@ -115,8 +135,7 @@ export class ProblemDetectorService {
         impact: '۲ برابر افزایش مچ شدن با همشهری‌ها',
       });
     }
-
-    if (!phase?.bio || phase.bio.length < 50) {
+    if (!phase.bio || phase.bio.length < 50) {
       problems.push({
         category: 'profile',
         severity: 'medium',
@@ -126,16 +145,14 @@ export class ProblemDetectorService {
         impact: '۳ برابر افزایش پیام دریافتی',
       });
     }
-
     return problems;
   }
 
   private async detectImageProblems(
-    userId: number,
+    _userId: number,
     images: UserImageAnalysis[],
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
-
     if (images.length === 0) {
       problems.push({
         category: 'image',
@@ -155,7 +172,6 @@ export class ProblemDetectorService {
         impact: '۳ برابر افزایش لایک',
       });
     }
-
     const lowQualityImages = images.filter((img) => img.qualityScore < 0.5);
     if (lowQualityImages.length > 0) {
       problems.push({
@@ -167,25 +183,24 @@ export class ProblemDetectorService {
         impact: '۲ برابر افزایش نرخ لایک',
       });
     }
-
     return problems;
   }
 
-  private detectEngagementProblems(
-    userId: number,
+  private async detectEngagementProblems(
+    _userId: number,
     interactions: InteractionAnalysis[],
     visitors: unknown[],
     metrics: UserMetricsSnapshot,
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
-
     const likeCount = interactions.filter((i) => i.type === 'like').length;
     const messageCount = interactions.filter(
       (i) => i.type === 'message',
     ).length;
     const viewCount = visitors.length;
 
-    if (likeCount < 5 && metrics?.daysSinceSignup > 3) {
+    const daysSinceSignup = metrics.daysSinceSignup ?? 0;
+    if (likeCount < 5 && daysSinceSignup > 3) {
       problems.push({
         category: 'engagement',
         severity: 'high',
@@ -195,8 +210,7 @@ export class ProblemDetectorService {
         impact: 'افزایش ۳ برابری بازدید از پروفایل تو',
       });
     }
-
-    if (messageCount === 0 && metrics?.daysSinceSignup > 7) {
+    if (messageCount === 0 && daysSinceSignup > 7) {
       problems.push({
         category: 'engagement',
         severity: 'critical',
@@ -206,7 +220,6 @@ export class ProblemDetectorService {
         impact: 'شروع ارتباطات واقعی',
       });
     }
-
     const viewToLikeRatio = viewCount > 0 ? likeCount / viewCount : 0;
     if (viewCount > 20 && viewToLikeRatio < 0.1) {
       problems.push({
@@ -218,17 +231,15 @@ export class ProblemDetectorService {
         impact: '۲ برابر افزایش لایک',
       });
     }
-
     return problems;
   }
 
   private async detectPersonalityProblems(
-    userId: number,
+    _userId: number,
     personality: PersonalityProfile,
     interactions: InteractionAnalysis[],
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
-
     if (!personality) return problems;
 
     const messages = interactions.filter((i) => i.type === 'message');
@@ -248,7 +259,8 @@ export class ProblemDetectorService {
       }
     }
 
-    if (personality.ocean?.extraversion < 0.3) {
+    const extraversion = personality.ocean?.extraversion ?? 0.5;
+    if (extraversion < 0.3) {
       problems.push({
         category: 'personality',
         severity: 'low',
@@ -258,7 +270,6 @@ export class ProblemDetectorService {
         impact: 'افزایش ۵۰٪ شروع مکالمه',
       });
     }
-
     return problems;
   }
 
@@ -267,8 +278,9 @@ export class ProblemDetectorService {
     metrics: UserMetricsSnapshot,
   ): Promise<UserProblem[]> {
     const problems: UserProblem[] = [];
-
     if (!phase) return problems;
+
+    const lastPurchaseDays = metrics.lastPurchaseDays ?? 0;
 
     switch (phase.phase) {
       case 'cold':
@@ -281,7 +293,6 @@ export class ProblemDetectorService {
           impact: 'وارد شدن به فاز گرم و دیده شدن بیشتر',
         });
         break;
-
       case 'warm':
         if (!phase.everPaid) {
           problems.push({
@@ -294,9 +305,8 @@ export class ProblemDetectorService {
           });
         }
         break;
-
       case 'hot':
-        if (phase.everPaid && metrics?.lastPurchaseDays > 30) {
+        if (phase.everPaid && lastPurchaseDays > 30) {
           problems.push({
             category: 'payment',
             severity: 'medium',
@@ -308,7 +318,6 @@ export class ProblemDetectorService {
         }
         break;
     }
-
     return problems;
   }
 }

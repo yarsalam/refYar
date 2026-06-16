@@ -2,10 +2,10 @@
 import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
 import { AdminApiGuard } from '../../guards/api-key.guard';
 import { CampaignSEOService } from '../../../seo/services/campaign-seo.service';
-import { RevenueAttributionService } from '../../../seo/services/revenue-attribution.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { RevenueAttributionService } from 'src/revenue/revenue-attribution.service';
 
 @Controller('admin-api/growth/campaigns')
 @UseGuards(AdminApiGuard)

@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AdminApiGuard } from '../../guards/api-key.guard';
-import { RevenueAttributionService } from '../../../seo/services/revenue-attribution.service';
 import { RevenueIntelligenceService } from '../../../revenue/revenue-intelligence.service';
+import { RevenueAttributionService } from 'src/revenue/revenue-attribution.service';
 
 @Controller('admin-api/revenue')
 @UseGuards(AdminApiGuard)
@@ -32,7 +32,7 @@ export class AdminApiRevenueController {
   async historical() {
     // داده‌های تاریخی برای پیش‌بینی
     // return this.revenueIntelligence.getHistoricalData(); // باید پیاده‌سازی شود
-     return [];
+    return [];
   }
 
   @Get('forecast')

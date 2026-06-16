@@ -1,11 +1,9 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  ProblemDetectorService,
-  UserProblem,
-} from '../analyzers/problem-detector.service';
+import { ProblemDetectorService } from '../analyzers/problem-detector.service';
 import { PhaseService } from '../../phase/phase.service';
 import { UserEventService } from '../../user-event/user-event.service';
 import { EventType } from '../../user-event/entities/user-event.entity';
+import { UserProblem } from '../types/user-problem.interface';
 
 export interface Guidance {
   id: string;

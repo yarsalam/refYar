@@ -30,8 +30,6 @@ export class ReportBlockService {
 
     private readonly userEventService: UserEventService,
     private readonly featureStore: FeatureStoreService,
-
-    @Inject(forwardRef(() => TrustScoreService))
     private readonly trustScoreService: TrustScoreService,
 
     private readonly redis: RedisService,

@@ -89,7 +89,8 @@ export class AiService {
       );
       return res.data;
     } catch (error: unknown) {
-      this.logger.error('train failed', error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('train failed: ' + message);
       throw new Error('AI service unavailable');
     }
   }

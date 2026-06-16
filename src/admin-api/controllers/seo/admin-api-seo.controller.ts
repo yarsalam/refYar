@@ -4,10 +4,10 @@ import { ConfigService } from '@nestjs/config';
 import { AdminApiGuard } from '../../guards/api-key.guard';
 import { SEOCollectorService } from '../../../seo/services/seo-collector.service';
 import { SEOService } from '../../../seo/services/seo.service';
-import { RevenueAttributionService } from '../../../seo/services/revenue-attribution.service';
 import { SEORetentionService } from '../../../seo/services/analytics/seo-retention.service';
 import { ContentOpportunityService } from '../../../seo/services/intelligence/content-opportunity.service';
 import { RevenueIntelligenceService } from '../../../revenue/revenue-intelligence.service';
+import { RevenueAttributionService } from 'src/revenue/revenue-attribution.service';
 
 @Controller('admin-api/seo')
 @UseGuards(AdminApiGuard)

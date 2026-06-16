@@ -228,7 +228,7 @@ services:
     build: ./python-ai/services/ai_revenue
     container_name: ai_revenue
     ports:
-      - "8006:8026"  # پورت تغییر کرد
+      - "8006:8000"  # پورت تغییر کرد
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -293,72 +293,72 @@ services:
         reservations:
           memory: 1G
 
-  ai_support:
-    build: ./python-ai/services/ai_support
-    container_name: ai_support
-    ports:
-      - "8016:8016"
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MODEL_PATH=/app/models
-    volumes:
-      - model_cache:/app/models
-    depends_on:
-      - redis
-    networks:
-      - ai_network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
+  # ai_support:
+  #   build: ./python-ai/services/ai_support
+  #   container_name: ai_support
+  #   ports:
+  #     - "8016:8016"
+  #   environment:
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - MODEL_PATH=/app/models
+  #   volumes:
+  #     - model_cache:/app/models
+  #   depends_on:
+  #     - redis
+  #   networks:
+  #     - ai_network
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #       reservations:
+  #         memory: 1G
 
-  personality:
-    build: ./python-ai/services/personality
-    container_name: personality
-    ports:
-      - "8101:8023"  # پورت تغییر کرد
-    environment:
-      - MODEL_CACHE=/app/models
-    volumes:
-      - model_cache:/app/models
-    depends_on: []
-    networks:
-      - ai_network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1.5G
-        reservations:
-          memory: 1G
+  # personality:
+  #   build: ./python-ai/services/personality
+  #   container_name: personality
+  #   ports:
+  #     - "8101:8100"  # پورت تغییر کرد
+  #   environment:
+  #     - MODEL_CACHE=/app/models
+  #   volumes:
+  #     - model_cache:/app/models
+  #   depends_on: []
+  #   networks:
+  #     - ai_network
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1.5G
+  #       reservations:
+  #         memory: 1G
 
   # ============================================
   # سرویس‌های پایتون - دسته TF (python-ai-tf)
   # ============================================
 
-  ai_image:
-    build: ./python-ai/services/ai_image
-    container_name: ai_image
-    ports:
-      - "8102:8024"  # پورت تغییر کرد
-    environment:
-      - MODEL_CACHE=/app/models
-    volumes:
-      - model_cache:/app/models
-    depends_on: []
-    networks:
-      - ai_network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
+  # ai_image:
+  #   build: ./python-ai/services/ai_image
+  #   container_name: ai_image
+  #   ports:
+  #     - "8102:8100"  # پورت تغییر کرد
+  #   environment:
+  #     - MODEL_CACHE=/app/models
+  #   volumes:
+  #     - model_cache:/app/models
+  #   depends_on: []
+  #   networks:
+  #     - ai_network
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #       reservations:
+  #         memory: 1G
 
   ai_verification:
     build: ./python-ai/services/ai_verification
@@ -409,7 +409,7 @@ services:
     build: ./python-ai/services/ml_service
     container_name: ml_service
     ports:
-      - "8007:8027"  # پورت تغییر کرد
+      - "8007:8000"  # پورت تغییر کرد
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -459,17 +459,17 @@ services:
   # سرویس‌های پایتون - دسته seo
   # ============================================     
 
-  aeo_tracker:
-    build:
-      context: ./python-ai/services/ai_aeo_tracker   # ← همون context قبلی
-      additional_contexts:
-        wheels: ./python-ai/downloaded_wheels
-    ports:
-      - "8030:8030"
-    env_file:
-      - .env
-    networks:
-      - ai_network 
+  # aeo_tracker:
+  #   build:
+  #     context: ./python-ai/services/ai_aeo_tracker   # ← همون context قبلی
+  #     additional_contexts:
+  #       wheels: ./python-ai/downloaded_wheels
+  #   ports:
+  #     - "8030:8030"
+  #   env_file:
+  #     - .env
+  #   networks:
+  #     - ai_network 
 
   ai_uplift:
     build:
@@ -505,4 +505,71 @@ services:
     env_file:
       - .env
     networks:
-      - ai_network            
+      - ai_network  
+
+  personality:
+    build: ./python-ai/services/personality
+    container_name: personality
+    ports:
+      - "8101:8100"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ai_network
+    restart: unless-stopped
+
+  ai_image:
+    build:
+      context: ./python-ai/services/ai_image
+      additional_contexts:
+        wheels: ./python-ai/downloaded_wheels   # ← اضافه شد
+    container_name: ai_image
+    ports:
+      - "8102:8100"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ai_network
+    restart: unless-stopped
+
+  ai_support:
+    build: ./python-ai/services/ai_support
+    container_name: ai_support
+    ports:
+      - "8016:8016"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODEL_PATH=/app/models
+    volumes:
+      - model_cache:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ai_network
+    restart: unless-stopped
+
+  aeo_tracker:   # ai_aeo_tracker
+    build:
+      context: ./python-ai/services/ai_aeo_tracker
+      additional_contexts:
+        wheels: ./python-ai/downloaded_wheels
+    ports:
+      - "8030:8030"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - ai_network
+    restart: unless-stopped              

@@ -9,7 +9,9 @@ export class AEOTrackerService {
 
   async getMentions(brand: string, prompts: string[]) {
     const url = `${process.env.AEO_TRACKER_URL}/check-mentions`;
-    const { data } = await firstValueFrom(this.httpService.post(url, { brand, prompts }));
+    const { data } = await firstValueFrom(
+      this.httpService.post(url, { brand, prompts }),
+    );
     return data;
   }
 }

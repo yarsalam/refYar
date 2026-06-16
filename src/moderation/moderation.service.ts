@@ -81,7 +81,8 @@ export class ModerationService {
         this.openCircuit();
       }
 
-      this.logger.error(`Moderation failed: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('Moderation failed: ' + message);
 
       // ارسال به صف با تنظیمات مناسب برای جلوگیری از memory leak
       await this.moderationQueue.add(
@@ -274,7 +275,8 @@ export class ModerationService {
 
       await this.logRepo.save(log);
     } catch (error: unknown) {
-      this.logger.error(`Failed to save moderation log: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error('Failed to save moderation log: ' + message);
     }
   }
 

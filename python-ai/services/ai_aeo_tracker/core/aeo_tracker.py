@@ -8,8 +8,8 @@ from openai import AsyncOpenAI
 logger = logging.getLogger(__name__)
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+# client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", "sk-dummy-key"))
 
 class AEOVisibilityTracker:
     async def check_mentions(self, brand: str, prompts: List[str]) -> List[Dict]:

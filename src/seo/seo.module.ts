@@ -19,12 +19,10 @@ import { SEOCollectorService } from './services/seo-collector.service';
 
 // Modules
 import { UserEventModule } from '../user-event/user-event.module';
-import { PhaseModule } from '../phase/phase.module';
 import { UserMetricsModule } from '../user-metrics/user-metrics.module';
 import { ExternalSEOToolsService } from './services/external-seo-tools.service';
 import { SEOController } from './seo.controller';
 import { InteractionsModule } from 'src/interaction/interaction.module';
-import { RevenueModule } from 'src/revenue/revenue.module';
 import { FeatureStoreRevenueModule } from 'src/feature-store-rvenue/feature-store-rvenue.module';
 import { SEORetentionService } from './services/analytics/seo-retention.service';
 import { SEOService } from './services/seo.service';
@@ -32,7 +30,6 @@ import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
 import { User } from 'src/users/entities/user.entity';
 import { ContentOpportunityService } from './services/intelligence/content-opportunity.service';
 import { Interaction } from 'src/interaction/entities/interaction.entity';
-import { RevenueAttributionService } from './services/revenue-attribution.service';
 import { Payment } from 'src/payments/entities/payment.entity';
 import { AutoScalingService } from './services/intelligence/auto-scaling.service';
 import { SocialListenerService } from 'src/social-listener/social-listener.service';
@@ -41,6 +38,7 @@ import { SERPFeatureHunterService } from './services/serp-feature-hunter.service
 import { BrandSentimentService } from './services/brand-sentiment.service';
 import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 import { AutoExecutorService } from './services/intelligence/auto-executor.service';
+import { RevenueModule } from 'src/revenue/revenue.module';
 
 @Module({
   imports: [
@@ -54,7 +52,6 @@ import { AutoExecutorService } from './services/intelligence/auto-executor.servi
       Interaction,
       Payment,
     ]),
-    forwardRef(() => RevenueModule),
     HttpModule.register({
       timeout: 10000,
       maxRedirects: 5,
@@ -63,12 +60,12 @@ import { AutoExecutorService } from './services/intelligence/auto-executor.servi
       name: 'seo-analysis',
     }),
     UserEventModule,
-    forwardRef(() => PhaseModule),
     UserMetricsModule,
     InteractionsModule,
     FeatureStoreRevenueModule,
     SocialListenerModule,
     FeatureStoreModule,
+    RevenueModule,
   ],
   controllers: [SEOController],
   providers: [
@@ -82,7 +79,6 @@ import { AutoExecutorService } from './services/intelligence/auto-executor.servi
     SEORetentionService,
     SEOService,
     ContentOpportunityService,
-    RevenueAttributionService,
     AutoScalingService,
     SocialListenerService,
     SERPFeatureHunterService,
@@ -94,7 +90,6 @@ import { AutoExecutorService } from './services/intelligence/auto-executor.servi
     SEOCollectorService,
     ExternalSEOToolsService,
     SocialListenerService,
-    RevenueAttributionService,
     SEOService,
     SEORetentionService,
     ContentOpportunityService,

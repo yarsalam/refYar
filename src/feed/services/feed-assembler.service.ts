@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
@@ -22,7 +22,6 @@ export class FeedAssemblerService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-    private readonly phaseService: PhaseService,
     private readonly vipService: VipService,
     private readonly creditsService: CreditsService,
     private readonly seoCollector: SEOCollectorService,
@@ -30,6 +29,9 @@ export class FeedAssemblerService {
     private readonly scoringService: FeedScoringService,
     private readonly relationService: FeedRelationService,
     private readonly promotionService: FeedPromotionService,
+
+    @Inject(forwardRef(() => PhaseService)) // ← فیکس مهم
+    private readonly phaseService: PhaseService,
   ) {}
 
   private mapUserToFeed(user: User): FeedUser {
@@ -41,9 +43,9 @@ export class FeedAssemblerService {
       nickname: user.nickname,
       city: user.city,
       gender: user.gender,
-      age: this.calculateAge(user.birth_year),
-      hobbies_self: (user.hobbies || []).slice(0, 3),
-      values_self: (user.values || []).slice(0, 3),
+      age: this.calculateAge(user.birth_year ?? ''),
+      hobbies_self: (user.hobbies_self || []).slice(0, 3),
+      values_self: (user.values_self || []).slice(0, 3),
       userImages: mainImage ? [{ url: mainImage.url, isMain: true }] : [],
     };
   }
@@ -107,7 +109,9 @@ export class FeedAssemblerService {
     ]);
 
     const enrichedPhase: FeedPhase = {
-      phase: phase.phase,
+      phase: (['cold', 'warm', 'hot'].includes(phase.phase)
+        ? phase.phase
+        : 'cold') as FeedPhase['phase'],
       vipActive: isVip,
       boostActive: !!(
         user.boost?.activeUntil && new Date(user.boost.activeUntil) > new Date()

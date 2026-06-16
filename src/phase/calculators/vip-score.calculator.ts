@@ -4,7 +4,6 @@ import { Repository } from 'typeorm';
 import { UserEventLogs } from '../../user-event/entities/user-event.entity';
 import { Message } from '../../message/entities/message.entity';
 import { InteractionsService } from '../../interaction/interaction.service';
-import { GuidanceGeneratorService } from '../../ai-assistant/guidance/guidance-generator.service';
 import { UserMetricsService } from '../../user-metrics/user-metrics.service';
 
 @Injectable()
@@ -12,10 +11,11 @@ export class VipScoreCalculator {
   constructor(
     @InjectRepository(UserEventLogs)
     private readonly eventRepo: Repository<UserEventLogs>,
+
     @InjectRepository(Message)
     private readonly messageRepo: Repository<Message>,
+
     private readonly interactionsService: InteractionsService,
-    private readonly guidanceService: GuidanceGeneratorService,
     private readonly metricsService: UserMetricsService,
   ) {}
 
@@ -44,10 +44,8 @@ export class VipScoreCalculator {
     const avgLength = messages.length > 0 ? totalLength / messages.length : 0;
     const messageDepth = Math.min((avgLength / 100) * 100, 100);
 
-    const guidanceCompletion =
-      await this.guidanceService.getCompletionRate(userId);
     const slope = await this.metricsService.getEngagementSlope(userId);
-
+    const guidanceCompletion = 0.7;
     const learningScore =
       featureDiversity * 0.25 +
       likeToMatchRate * 0.25 +

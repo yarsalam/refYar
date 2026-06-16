@@ -54,7 +54,7 @@ export class BoostService {
 
     await this.boostQueueService.enqueue(userId, {
       strength: boost.strength,
-      expiresAt: boost.activeUntil!,
+      expiresAt: boost.activeUntil,
       source: 'instant',
     });
 

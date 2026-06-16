@@ -6,18 +6,14 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { MessageService } from '../message/message.service';
-import { forwardRef, Inject } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 
 @WebSocketGateway({ cors: true })
 export class ChatGateway {
   @WebSocketServer()
   server: Server;
 
-  constructor(
-    @Inject(forwardRef(() => MessageService))
-    private messageService: MessageService,
-  ) {}
+  constructor() {}
 
   async handleConnection(client: Socket) {
     const token = client.handshake.auth.token;
@@ -51,5 +47,10 @@ export class ChatGateway {
 
   async emitMessageRead(room: string, messageId: number) {
     this.server.to(room).emit('message_read', { messageId });
+  }
+
+  @OnEvent('message.created')
+  async handleMessageCreated(payload: { room: string; message: any }) {
+    this.server.to(payload.room).emit('new_message', payload.message);
   }
 }

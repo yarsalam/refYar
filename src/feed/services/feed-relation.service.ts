@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { RelationStatusService } from '../../relation-status/relation-status.service';
 import { FeedItem } from '../types/feed.types';
 
-
 @Injectable()
 export class FeedRelationService {
   constructor(private readonly relationStatus: RelationStatusService) {}

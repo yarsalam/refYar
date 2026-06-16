@@ -22,7 +22,8 @@ export class TelegramHelper {
 
       return true;
     } catch (err: unknown) {
-      console.error('Telegram Send Error:', err.response?.data || err);
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error('Telegram Send Error:', detail);
       return false;
     }
   }

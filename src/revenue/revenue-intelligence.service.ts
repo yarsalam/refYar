@@ -351,5 +351,4 @@ export class RevenueIntelligenceService {
     metrics?: any;
     ltvBySource?: any;
   }) {}
-
 }

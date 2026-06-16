@@ -7,10 +7,11 @@ import { UserEventModule } from '../user-event/user-event.module';
 import { RedisModule } from '../redis/redis.module';
 import { Personality } from 'src/personality/entities/personality.entity';
 import { FeatureStoreController } from './feature-store.controller';
+import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserFeatureSnapshot, Personality]),
+    TypeOrmModule.forFeature([UserFeatureSnapshot, Personality, User]),
     PersonalityModule,
     UserEventModule,
     RedisModule,

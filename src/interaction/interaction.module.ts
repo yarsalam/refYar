@@ -4,7 +4,6 @@ import { Interaction } from './entities/interaction.entity';
 import { InteractionsController } from './interaction.controller';
 import { InteractionsService } from './interaction.service';
 import { ReportBlockModule } from 'src/report-block/report-block.module';
-import { AuthModule } from 'src/auth/auth.module';
 import { User } from 'src/users/entities/user.entity';
 import { Message } from 'src/message/entities/message.entity';
 import { UserEventModule } from 'src/user-event/user-event.module';
@@ -17,7 +16,6 @@ import { RelationStatusModule } from 'src/relation-status/relation-status.module
 @Module({
   imports: [
     TypeOrmModule.forFeature([Interaction, User, Message]),
-    forwardRef(() => AuthModule),
     forwardRef(() => PhaseModule),
     forwardRef(() => SuggestionModule),
     ReportBlockModule,

@@ -29,7 +29,6 @@ import { AuthProfileService } from './services/auth-profile.service';
   imports: [
     TypeOrmModule.forFeature([User]),
     forwardRef(() => UsersModule),
-    forwardRef(() => UserPhonesModule),
     forwardRef(() => ChannelsModule),
     forwardRef(() => PhaseModule),
     forwardRef(() => FeatureStoreModule),
@@ -45,6 +44,7 @@ import { AuthProfileService } from './services/auth-profile.service';
     WhatsappModule,
     DevicePhoneModule,
     UserEventModule,
+    UserPhonesModule,
   ],
   providers: [
     AuthService,

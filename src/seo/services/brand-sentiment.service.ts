@@ -21,7 +21,8 @@ export class BrandSentimentService {
       );
       return response.data;
     } catch (e: unknown) {
-      this.logger.error(`Sentiment analysis failed: ${e.message}`);
+      const message = e instanceof Error ? e.message : String(e);
+      this.logger.error('Sentiment analysis failed: ' + message);
       return { sentiment: 'neutral', score: 0.5 };
     }
   }

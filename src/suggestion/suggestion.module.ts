@@ -2,9 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { SuggestionService } from './suggestion.service';
 import { SuggestionController } from './suggestion.controller';
 import { UsersModule } from 'src/users/users.module';
-import { AuthModule } from 'src/auth/auth.module';
 import { ReportBlockModule } from 'src/report-block/report-block.module';
-
 import { InteractionsModule } from 'src/interaction/interaction.module';
 import { PersonalityModule } from 'src/personality/personality.module';
 import { AiModule } from 'src/ai/ai.module';
@@ -17,12 +15,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserFeatureSnapshot } from 'src/feature-store/entities/user-feature.entity';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { RelationStatusModule } from 'src/relation-status/relation-status.module';
+import { UserQueryService } from 'src/users/user-query.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserFeatureSnapshot]),
-    UsersModule, // فرض بر این است که UserModule ارائه‌دهنده UserService است
-    forwardRef(() => AuthModule),
+    UsersModule,
     ReportBlockModule,
     forwardRef(() => InteractionsModule),
     PersonalityModule,
@@ -37,6 +35,7 @@ import { RelationStatusModule } from 'src/relation-status/relation-status.module
     RevenueScorerService,
     DiversityOptimizerService,
     FeatureStoreService,
+    UserQueryService,
   ],
 
   controllers: [SuggestionController],

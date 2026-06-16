@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Payment } from 'src/payments/entities/payment.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Repository, Between } from 'typeorm';
-import { SEOActivity } from '../entities/seo-activity.entity';
 import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/redis/redis.constants';
@@ -11,6 +10,7 @@ import { HttpService } from '@nestjs/axios';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { SEOActivity } from 'src/seo/entities/seo-activity.entity';
 
 export interface LTVResult {
   source: string;
@@ -171,7 +171,8 @@ export class RevenueAttributionService {
       );
       return response.data.predicted_ltv;
     } catch (e: unknown) {
-      this.logger.error(`ML prediction failed, using fallback. ${e.message}`);
+      const message = e instanceof Error ? e.message : String(e);
+      this.logger.error('ML prediction failed, using fallback: ' + message);
       // fallback به روش قبلی
       const user = await this.userRepo.findOne({ where: { id: userId } });
       if (!user) return 0;

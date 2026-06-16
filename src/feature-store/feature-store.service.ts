@@ -1,13 +1,36 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { UserFeatureSnapshot } from './entities/user-feature.entity';
+import { User } from '../users/entities/user.entity';
 import { PersonalityService } from '../personality/personality.service';
 import { UserEventService } from '../user-event/user-event.service';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/redis/redis.constants';
-import { UserQueryService } from 'src/users/user-query.service';
+import { Inject } from '@nestjs/common';
+
+const CACHE_KEY_PREFIX = 'feature_snapshot';
+
+const DEFAULT_PROFILE_WEIGHTS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+const DEFAULT_BEHAVIOR_WEIGHTS = [1, 1, 1, 1, 1];
+const DEFAULT_PERSONALITY_WEIGHTS = [1, 1, 1, 1, 1];
+
+const REFRESH_CONCURRENCY = 10;
+
+@Injectable()
+export class FeatureStoreService {
+  private readonly logger = new Logger(FeatureStoreService.name);
+
+  constructor(
+    @InjectRepository(UserFeatureSnapshot)
+    private readonly featureRepo: Repository<UserFeatureSnapshot>,
+
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+
+    @Inject(REDIS_CLIENT)
+    private readonly redis: Redis,
 
 // کلید اختصاصی برای feature-store — جدا از revenue features
 const CACHE_KEY_PREFIX = 'feature_snapshot';
@@ -32,7 +55,6 @@ export class FeatureStoreService {
 
     private readonly personalityService: PersonalityService,
     private readonly userEventService: UserEventService,
-    private readonly userQueryService: UserQueryService,
   ) {}
 
   private cacheKey(userId: number): string {
@@ -89,7 +111,13 @@ export class FeatureStoreService {
 
     try {
       this.logger.log('Refreshing feature store...');
-      const activeUsers = await this.userQueryService.getActiveUserIds(1000);
+      // ✅ جایگزین usersService.getActiveUserIds — مستقیم از Repository
+      const activeUserRecords = await this.userRepo.find({
+        where: { status: 'active' },
+        select: ['id'],
+        take: 1000,
+      });
+      const activeUsers = activeUserRecords.map((u) => u.id);
 
       for (let i = 0; i < activeUsers.length; i += REFRESH_CONCURRENCY) {
         const batch = activeUsers.slice(i, i + REFRESH_CONCURRENCY);
@@ -108,7 +136,9 @@ export class FeatureStoreService {
     try {
       let user: any;
       try {
-        user = await this.userQueryService.findById(userId);
+        // ✅ جایگزین usersService.findById — مستقیم از Repository
+        user = await this.userRepo.findOne({ where: { id: userId } });
+        if (!user) throw new Error('not found');
       } catch {
         this.logger.warn(`User ${userId} not found, skipping refresh`);
         return;
@@ -165,7 +195,7 @@ export class FeatureStoreService {
 
       await this.featureRepo.save(features);
       await this.redis.del(this.cacheKey(userId));
-    } catch (error: unknown) {
+    } catch (error) {
       this.logger.error(
         `Failed to refresh features for user ${userId}: ${error}`,
       );

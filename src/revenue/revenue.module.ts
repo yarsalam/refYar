@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { User } from '../users/entities/user.entity';
@@ -10,16 +10,19 @@ import { RevenueIntelligenceProcessor } from './revenue-intelligence.processor';
 import { DecisionEngineService } from './decision-engine.service';
 import { RedisModule } from '../redis/redis.module';
 import { QueuesModule } from '../queues/queues.module';
-import { SEOModule } from '../seo/seo.module';
 import { FeatureStoreRevenueModule } from '../feature-store-rvenue/feature-store-rvenue.module';
+import { RevenueAttributionService } from './revenue-attribution.service';
+import { HttpModule } from '@nestjs/axios';
+import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Payment, SEOActivity, UserEventLogs]),
-    forwardRef(() => SEOModule),
     QueuesModule,
     RedisModule,
     FeatureStoreRevenueModule,
+    FeatureStoreModule,
+    HttpModule,
     BullModule.registerQueue(
       { name: 'revenue-intelligence' },
       { name: 'ml-predictions' },
@@ -31,8 +34,13 @@ import { FeatureStoreRevenueModule } from '../feature-store-rvenue/feature-store
     DecisionEngineService,
     RevenueIntelligenceProcessor,
     RevenueIntelligenceService,
+    RevenueAttributionService,
   ],
 
-  exports: [RevenueIntelligenceService, DecisionEngineService],
+  exports: [
+    RevenueIntelligenceService,
+    DecisionEngineService,
+    RevenueAttributionService,
+  ],
 })
 export class RevenueModule {}

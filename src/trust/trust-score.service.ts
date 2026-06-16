@@ -1,10 +1,10 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { UserEventService } from '../user-event/user-event.service';
 import { EventType } from '../user-event/entities/user-event.entity';
-import { ReportBlockService } from '../report-block/report-block.service';
+import { Report } from 'src/report-block/entities/report.entity';
 
 @Injectable()
 export class TrustScoreService {
@@ -14,8 +14,8 @@ export class TrustScoreService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
 
-    @Inject(forwardRef(() => ReportBlockService))
-    private readonly reportService: ReportBlockService,
+    @InjectRepository(Report)
+    private readonly reportRepo: Repository<Report>,
 
     private readonly userEventService: UserEventService,
   ) {}
@@ -59,8 +59,10 @@ export class TrustScoreService {
     score += Math.min(10, accountAge / 10);
 
     // 5. گزارش‌ها
-    const reports = await this.reportService.getReportsAgainst(userId);
-    score -= reports.length * 5;
+    const reports = await this.reportRepo.count({
+      where: { reportedUser: { id: userId } }, // بستگی به ساختار entity دارد
+    });
+    score -= reports * 5;
 
     // 6. رفتار (از UserEvent)
     const events = await this.userEventService.getUserEvents(userId, {

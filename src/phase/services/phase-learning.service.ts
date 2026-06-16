@@ -4,8 +4,8 @@ import { Repository } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { PhaseWeightService } from './phase-weight.service';
 import { FeatureStoreService } from '../../feature-store/feature-store.service';
-import { RevenueAttributionService } from '../../seo/services/revenue-attribution.service';
 import { PhaseWeights } from '../types/phase.interface';
+import { RevenueAttributionService } from 'src/revenue/revenue-attribution.service';
 
 @Injectable()
 export class PhaseLearningService {

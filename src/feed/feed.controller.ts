@@ -8,7 +8,7 @@ import { FeedAssemblerService } from './services/feed-assembler.service';
 @Controller('feed')
 @UseGuards(JwtAuthGuard)
 export class FeedController {
-  constructor(private readonly feedService: FeedAssemblerService) {}
+  constructor(private readonly feedAssembler: FeedAssemblerService) {}
 
   @Post('dismiss/:promotionId')
   @ApiOperation({ summary: 'ثبت بستن تبلیغ' })

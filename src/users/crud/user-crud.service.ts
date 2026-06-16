@@ -5,7 +5,7 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
@@ -98,5 +98,17 @@ export class UserCrudService {
     });
     if (!user) throw new NotFoundException('کاربر یافت نشد');
     return user;
+  }
+
+  async findByIds(
+    ids: number[],
+    options?: { relations?: string[]; select?: string[] },
+  ): Promise<User[]> {
+    if (!ids.length) return [];
+    return this.userRepo.find({
+      where: { id: In(ids) },
+      relations: options?.relations,
+      select: options?.select as any,
+    });
   }
 }

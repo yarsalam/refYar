@@ -1,10 +1,4 @@
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Message } from './entities/message.entity';
@@ -19,7 +13,7 @@ import { UserEventService } from 'src/user-event/user-event.service';
 import { ModerationService } from 'src/moderation/moderation.service';
 import { CreditsService } from 'src/payments/credits/credits.service';
 import { PaywallException } from 'src/payments/paywall/paywall.exception';
-import { PhaseService } from 'src/phase/phase.service';
+
 import { RevenueScorerService } from 'src/suggestion/scoring/revenue-scorer.service';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { RelationStatusService } from 'src/relation-status/relation-status.service';
@@ -40,10 +34,6 @@ export class MessageService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
 
-    @Inject(forwardRef(() => PhaseService))
-    private readonly phaseService: PhaseService,
-
-    @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
 
     private readonly notificationService: NotificationService,
@@ -80,7 +70,7 @@ export class MessageService {
     if (!dto.is_free) {
       try {
         await this.creditsService.consume(dto.from_id, 1, 'send_message');
-      } catch (error: unknown) {
+      } catch (error) {
         if (error instanceof PaywallException) throw error;
         throw new Error('خطا در بررسی اعتبار');
       }
@@ -115,21 +105,12 @@ export class MessageService {
         message: 'شما یک پیام جدید دارید.',
         related_id: saved.id,
       }),
-      this.phaseService.learnFromFeedback(dto.from_id, 'message'),
+      // ✅ phaseService.learnFromFeedback حذف شد — Phase مستقل است
       this.featureStore.learnFeatureWeights(dto.from_id, 'message'),
     ]);
 
-    // تنظیم phase multiplier (پس از ذخیره فاز)
-    const [senderPhase, receiverPhase] = await Promise.all([
-      this.phaseService.get(dto.from_id),
-      this.phaseService.get(dto.to_id),
-    ]);
-    const messageQuality = dto.content.length > 50 ? 1.5 : 0.3;
-    await this.revenueScorer.adjustPhaseMultiplier(
-      senderPhase.phase,
-      receiverPhase.phase,
-      messageQuality,
-    );
+    // ✅ phaseService.learnFromFeedback حذف شد — Phase اکنون مستقل است.
+    // phase multiplier بعداً با event-driven approach آپدیت می‌شود.
 
     return saved;
   }

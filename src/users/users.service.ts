@@ -67,4 +67,8 @@ export class UsersService {
   async findRecentSimilarUsers(userId: number, limit: number, daysAgo: number) {
     return this.similarity.findRecentSimilarUsers(userId, limit, daysAgo);
   }
+
+  async findByIds(ids: number[], options?: any): Promise<User[]> {
+    return this.crud.findByIds(ids, options);
+  }
 }

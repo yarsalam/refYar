@@ -42,6 +42,8 @@ import { RelationStatusModule } from './relation-status/relation-status.module';
 import { DebugModule } from './debug/debug.module';
 import { RetrievalModule } from './suggestion/retrieval/retrieval.module';
 import { AdminApiModule } from './admin-api/admin-api.module';
+import { PhaseModule } from './phase/phase.module';
+import { HealthController } from './app.controller';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -53,8 +55,8 @@ import { AdminApiModule } from './admin-api/admin-api.module';
       load: [databaseConfig, corsConfig],
       isGlobal: true,
     }),
-    TypeOrmModule.forRoot(databaseConfig()), // مقداردهی صحیح TypeORM
-    TypeOrmModule.forFeature([User]), // ثبت مدل یوزر
+    TypeOrmModule.forRoot(databaseConfig()),
+    TypeOrmModule.forFeature([User]),
     AuthModule,
     UsersModule,
     UserImagesModule,
@@ -66,6 +68,7 @@ import { AdminApiModule } from './admin-api/admin-api.module';
     UserPhonesModule,
     SuggestionModule,
     ReportBlockModule,
+    PhaseModule,
     InteractionsModule,
     PersonalityModule,
     AiModule,
@@ -92,6 +95,7 @@ import { AdminApiModule } from './admin-api/admin-api.module';
   ],
   providers: [RedisService],
   exports: [RedisService],
+  controllers: [HealthController],
 })
 // export class AppModule {}
 export class AppModule implements NestModule {

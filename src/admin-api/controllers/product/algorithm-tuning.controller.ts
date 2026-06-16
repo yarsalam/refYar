@@ -8,10 +8,11 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { AdminApiGuard } from '../../guards/api-key.guard';
-import { PhaseService, PhaseWeights } from '../../../phase/phase.service';
+import { PhaseService } from '../../../phase/phase.service';
 import { FeatureStoreService } from '../../../feature-store/feature-store.service';
 import { SuggestionService } from '../../../suggestion/suggestion.service';
 import { DiversityOptimizerService } from 'src/suggestion/optimization/diversity-optimizer.service';
+import { PhaseWeights } from 'src/phase/types/phase.interface';
 
 @Controller('admin-api/product/algorithm-tuning')
 @UseGuards(AdminApiGuard)

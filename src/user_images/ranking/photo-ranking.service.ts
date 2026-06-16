@@ -63,7 +63,8 @@ export class PhotoRankingService {
       await this.imageRepo.save(bestPhoto);
     } else if (
       currentMain.id !== bestPhoto.id &&
-      (bestPhoto.engagementScore || 0) > (currentMain.engagementScore || 0) * 1.2
+      (bestPhoto.engagementScore || 0) >
+        (currentMain.engagementScore || 0) * 1.2
     ) {
       currentMain.isMain = false;
       bestPhoto.isMain = true;

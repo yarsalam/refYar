@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, UseGuards, NotFoundException, Param } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  NotFoundException,
+  Param,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { SEOActivity } from './entities/seo-activity.entity';
@@ -8,7 +16,6 @@ import { SEORetentionService } from './services/analytics/seo-retention.service'
 import { SEOService } from './services/seo.service';
 import { ContentOpportunityService } from './services/intelligence/content-opportunity.service';
 import { RevenueIntelligenceService } from 'src/revenue/revenue-intelligence.service';
-import { RevenueAttributionService } from './services/revenue-attribution.service';
 import { AutoScalingService } from './services/intelligence/auto-scaling.service';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
@@ -17,6 +24,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SEORecommendation } from './entities/seo-recommendation.entity';
 import { AutoExecutorService } from './services/intelligence/auto-executor.service';
+import { RevenueAttributionService } from 'src/revenue/revenue-attribution.service';
 
 @ApiTags('seo')
 @Controller('seo')

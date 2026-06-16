@@ -27,7 +27,9 @@ export class InteractionsService {
     @InjectRepository(Message)
     private readonly messageRepo: Repository<Message>,
 
+    @Inject(forwardRef(() => PhaseService))
     private readonly phaseService: PhaseService,
+
     private readonly reportBlockService: ReportBlockService,
     private readonly userEventService: UserEventService,
     private readonly revenueScorer: RevenueScorerService,

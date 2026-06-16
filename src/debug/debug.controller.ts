@@ -1,15 +1,15 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { VectorSearchService } from '../suggestion/retrieval/vector-search.service';
 import { SuggestionService } from '../suggestion/suggestion.service';
-import { FeedBuilderService } from '../feed/feed.service';
 import { RelationStatusService } from '../relation-status/relation-status.service';
+import { FeedAssemblerService } from 'src/feed/services/feed-assembler.service';
 
 @Controller('debug')
 export class DebugController {
   constructor(
     private readonly vectorSearch: VectorSearchService,
     private readonly suggestionService: SuggestionService,
-    private readonly feedService: FeedBuilderService,
+    private readonly feedAssembler: FeedAssemblerService,
     private readonly relationStatus: RelationStatusService,
   ) {}
 
@@ -26,17 +26,21 @@ export class DebugController {
         suggestions,
       };
     } catch (e: unknown) {
-      return { error: e.message, stack: e.stack };
+      const message = e instanceof Error ? e.message : String(e);
+      const stack = e instanceof Error ? e.stack : undefined;
+      return { error: message, stack };
     }
   }
 
   @Get('feed/:userId')
   async testFeed(@Param('userId') userId: number) {
     try {
-      const feed = await this.feedService.buildFeed(userId);
+      const feed = await this.feedAssembler.buildFeed(userId, { limit: 5 });
       return { feedLength: feed.length, feed };
     } catch (e: unknown) {
-      return { error: e.message, stack: e.stack };
+      const message = e instanceof Error ? e.message : String(e);
+      const stack = e instanceof Error ? e.stack : undefined;
+      return { error: message, stack };
     }
   }
 
@@ -52,7 +56,9 @@ export class DebugController {
       );
       return rel;
     } catch (e: unknown) {
-      return { error: e.message, stack: e.stack };
+      const message = e instanceof Error ? e.message : String(e);
+      const stack = e instanceof Error ? e.stack : undefined;
+      return { error: message, stack };
     }
   }
 }
