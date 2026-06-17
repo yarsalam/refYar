@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { UserFeatureSnapshot } from './entities/user-feature.entity';
 import { User } from '../users/entities/user.entity';
@@ -8,7 +8,6 @@ import { PersonalityService } from '../personality/personality.service';
 import { UserEventService } from '../user-event/user-event.service';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/redis/redis.constants';
-import { Inject } from '@nestjs/common';
 
 const CACHE_KEY_PREFIX = 'feature_snapshot';
 
@@ -28,27 +27,6 @@ export class FeatureStoreService {
 
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
-
-    @Inject(REDIS_CLIENT)
-    private readonly redis: Redis,
-
-// کلید اختصاصی برای feature-store — جدا از revenue features
-const CACHE_KEY_PREFIX = 'feature_snapshot';
-
-const DEFAULT_PROFILE_WEIGHTS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-const DEFAULT_BEHAVIOR_WEIGHTS = [1, 1, 1, 1, 1];
-const DEFAULT_PERSONALITY_WEIGHTS = [1, 1, 1, 1, 1];
-
-// حداکثر همزمانی برای جلوگیری از DB meltdown
-const REFRESH_CONCURRENCY = 10;
-
-@Injectable()
-export class FeatureStoreService {
-  private readonly logger = new Logger(FeatureStoreService.name);
-
-  constructor(
-    @InjectRepository(UserFeatureSnapshot)
-    private readonly featureRepo: Repository<UserFeatureSnapshot>,
 
     @Inject(REDIS_CLIENT)
     private readonly redis: Redis,
@@ -111,7 +89,6 @@ export class FeatureStoreService {
 
     try {
       this.logger.log('Refreshing feature store...');
-      // ✅ جایگزین usersService.getActiveUserIds — مستقیم از Repository
       const activeUserRecords = await this.userRepo.find({
         where: { status: 'active' },
         select: ['id'],
@@ -122,7 +99,6 @@ export class FeatureStoreService {
       for (let i = 0; i < activeUsers.length; i += REFRESH_CONCURRENCY) {
         const batch = activeUsers.slice(i, i + REFRESH_CONCURRENCY);
         await Promise.all(batch.map((id) => this.refreshUserFeatures(id)));
-        // مکث کوتاه بین بچ‌ها برای کاهش فشار DB
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
 
@@ -136,7 +112,6 @@ export class FeatureStoreService {
     try {
       let user: any;
       try {
-        // ✅ جایگزین usersService.findById — مستقیم از Repository
         user = await this.userRepo.findOne({ where: { id: userId } });
         if (!user) throw new Error('not found');
       } catch {
@@ -230,16 +205,13 @@ export class FeatureStoreService {
       DEFAULT_PROFILE_WEIGHTS,
     );
 
-    // استاندارد سازی سال تولد: اگر عدد > 1400 → جلالی، وگرنه میلادی
     let age = 0;
     if (user.birth_year) {
       const year = parseInt(user.birth_year);
       if (!isNaN(year)) {
         if (year > 1300 && year < 1420) {
-          // جلالی: تبدیل به میلادی
           age = new Date().getFullYear() - (year + 621);
         } else {
-          // میلادی
           age = new Date().getFullYear() - year;
         }
         age = Math.max(0, Math.min(100, age));
@@ -329,7 +301,6 @@ export class FeatureStoreService {
     const defaults = target.key.includes('profile')
       ? DEFAULT_PROFILE_WEIGHTS
       : DEFAULT_BEHAVIOR_WEIGHTS;
-
     const weights = await this.getWeightArray(target.key, defaults);
     weights[target.index] = Math.max(0.1, weights[target.index] + 0.01);
     await this.redis.set(target.key, JSON.stringify(weights));

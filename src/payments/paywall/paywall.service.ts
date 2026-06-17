@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PhaseService } from '../../phase/phase.service';
 import { DevicePhoneService } from 'src/auth/device-phone/device-phone.service';
 import { VipService } from '../vip/vip.service';
@@ -24,7 +24,6 @@ export class PaywallService {
   private readonly logger = new Logger(PaywallService.name);
 
   constructor(
-    @Inject(forwardRef(() => PhaseService))
     private readonly phaseService: PhaseService,
     private readonly devicePhoneService: DevicePhoneService,
     private readonly vipService: VipService,

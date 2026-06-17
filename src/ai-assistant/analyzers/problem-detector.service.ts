@@ -19,7 +19,6 @@ export class ProblemDetectorService {
   private readonly logger = new Logger(ProblemDetectorService.name);
 
   constructor(
-    @Inject(forwardRef(() => PhaseService))
     private readonly phaseService: PhaseService,
     private readonly aiImageService: AiImageService,
     private readonly interactionsService: InteractionsService,

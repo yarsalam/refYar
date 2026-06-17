@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -12,11 +12,11 @@ import { UserSimilarityService } from './similarity/user-similarity.service';
 @Injectable()
 export class UsersService {
   constructor(
-    private readonly crud: UserCrudService,
     private readonly filter: UserFilterService,
     private readonly account: UserAccountService,
     private readonly discovery: UserDiscoveryService,
     private readonly similarity: UserSimilarityService,
+    private readonly crud: UserCrudService,
   ) {}
 
   // Delegate to crud

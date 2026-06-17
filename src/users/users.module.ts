@@ -6,6 +6,11 @@ import { UsersController } from './users.controller';
 import { UserEventModule } from 'src/user-event/user-event.module';
 import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 import { RelationStatusModule } from 'src/relation-status/relation-status.module';
+import { UserCrudService } from './crud/user-crud.service';
+import { UserFilterService } from './filter/user-filter.service';
+import { UserAccountService } from './account/user-account.service';
+import { UserDiscoveryService } from './discovery/user-discovery.service';
+import { UserSimilarityService } from './similarity/user-similarity.service';
 
 @Module({
   imports: [
@@ -15,7 +20,18 @@ import { RelationStatusModule } from 'src/relation-status/relation-status.module
     UserEventModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService],
-  exports: [UsersService, TypeOrmModule],
+  providers: [
+    UsersService,
+    UserCrudService, // ← اضافه شد
+    UserFilterService, // ← اضافه شد
+    UserAccountService, // ← اضافه شد
+    UserDiscoveryService, // ← اضافه شد
+    UserSimilarityService, // ← اضافه شد
+  ],
+  exports: [
+    UsersService,
+    UserCrudService, // ← export تا AuthModule بتواند استفاده کند
+    TypeOrmModule,
+  ],
 })
 export class UsersModule {}

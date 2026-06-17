@@ -20,7 +20,7 @@ import { ChatGateway } from './chat.gateway';
   providers: [MessageService, ChatGateway],
   imports: [
     TypeOrmModule.forFeature([Message, AppNotification, User]),
-    forwardRef(() => PhaseModule),
+    PhaseModule,
     NotificationModule,
     UserEventModule,
     ModerationModule,

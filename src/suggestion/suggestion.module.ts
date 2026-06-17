@@ -22,7 +22,7 @@ import { UserQueryService } from 'src/users/user-query.service';
     TypeOrmModule.forFeature([UserFeatureSnapshot]),
     UsersModule,
     ReportBlockModule,
-    forwardRef(() => InteractionsModule),
+    InteractionsModule,
     PersonalityModule,
     AiModule,
     UserEventModule,

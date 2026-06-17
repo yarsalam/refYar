@@ -25,7 +25,6 @@ export class GuidanceGeneratorService {
   private readonly logger = new Logger(GuidanceGeneratorService.name);
 
   constructor(
-    @Inject(forwardRef(() => PhaseService))
     private readonly phaseService: PhaseService,
     private readonly problemDetector: ProblemDetectorService,
     private readonly userEventService: UserEventService,

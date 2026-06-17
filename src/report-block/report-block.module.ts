@@ -12,7 +12,7 @@ import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Block, Report, User]),
-    forwardRef(() => UserEventModule),
+    UserEventModule,
     FeatureStoreModule,
   ],
   controllers: [ReportBlockController],

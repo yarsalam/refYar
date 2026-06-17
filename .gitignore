@@ -76,5 +76,6 @@ docker-compose.override.yml
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 firebase/firebase-service-account.json
 python-ai/requirements/
+python-ai/downloaded_wheels/
 python-ai/scripts/
 simulator

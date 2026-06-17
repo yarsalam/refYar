@@ -29,8 +29,6 @@ export class FeedAssemblerService {
     private readonly scoringService: FeedScoringService,
     private readonly relationService: FeedRelationService,
     private readonly promotionService: FeedPromotionService,
-
-    @Inject(forwardRef(() => PhaseService)) // ← فیکس مهم
     private readonly phaseService: PhaseService,
   ) {}
 

@@ -22,7 +22,7 @@ import { FeedController } from './feed.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
-    forwardRef(() => PhaseModule),
+    PhaseModule,
     SuggestionModule,
     UserEventModule,
     RedisModule,

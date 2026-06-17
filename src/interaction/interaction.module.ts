@@ -12,12 +12,13 @@ import { SuggestionModule } from 'src/suggestion/suggestion.module';
 import { PersonalityModule } from 'src/personality/personality.module';
 import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 import { RelationStatusModule } from 'src/relation-status/relation-status.module';
+import { RevenueScorerService } from 'src/suggestion/scoring/revenue-scorer.service';
+import { DiversityOptimizerService } from 'src/suggestion/optimization/diversity-optimizer.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Interaction, User, Message]),
-    forwardRef(() => PhaseModule),
-    forwardRef(() => SuggestionModule),
+    PhaseModule,
     ReportBlockModule,
     UserEventModule,
     PersonalityModule,
@@ -25,7 +26,11 @@ import { RelationStatusModule } from 'src/relation-status/relation-status.module
     RelationStatusModule,
   ],
   controllers: [InteractionsController],
-  providers: [InteractionsService],
+  providers: [
+    InteractionsService,
+    RevenueScorerService,
+    DiversityOptimizerService,
+  ],
   exports: [InteractionsService],
 })
 export class InteractionsModule {}

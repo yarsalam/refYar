@@ -25,9 +25,7 @@ export class AiAssistantService {
     @InjectRepository(User)
     private userRepo: Repository<User>,
 
-    @Inject(forwardRef(() => PaymentsService))
     private readonly paymentsService: PaymentsService,
-
     private readonly problemDetector: ProblemDetectorService,
     private readonly guidanceGenerator: GuidanceGeneratorService,
     private readonly phaseOptimizer: PhaseOptimizerService,

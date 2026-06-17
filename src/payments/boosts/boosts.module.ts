@@ -9,7 +9,7 @@ import { BoostController } from './boostController';
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserBoost]),
-    forwardRef(() => PhaseModule),
+    PhaseModule,
     UserEventModule,
   ],
   providers: [BoostService],

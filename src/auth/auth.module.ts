@@ -28,10 +28,10 @@ import { AuthProfileService } from './services/auth-profile.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
-    forwardRef(() => UsersModule),
-    forwardRef(() => ChannelsModule),
-    forwardRef(() => PhaseModule),
-    forwardRef(() => FeatureStoreModule),
+    UsersModule,
+    ChannelsModule,
+    PhaseModule,
+    FeatureStoreModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '30d' },

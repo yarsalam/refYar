@@ -24,8 +24,8 @@ import { UserVip } from './vip/entities/vip.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([ProductBundle, User, UserVip]),
-    forwardRef(() => PhaseModule),
-    forwardRef(() => SEOModule),
+    SEOModule,
+    PhaseModule,
     CreditsModule,
     BoostsModule,
     PaywallModule,

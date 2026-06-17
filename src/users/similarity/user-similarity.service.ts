@@ -20,9 +20,8 @@ export class UserSimilarityService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
 
-    @Inject(forwardRef(() => FeatureStoreService))
-    private readonly featureStore: FeatureStoreService,
 
+    private readonly featureStore: FeatureStoreService,
     private readonly relationStatus: RelationStatusService,
   ) {}
 
