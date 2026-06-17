@@ -1,9 +1,0 @@
---find-links /tmp/wheels
---no-index
-
-torch
-transformers
-sentence-transformers
-tokenizers
-safetensors
-accelerate

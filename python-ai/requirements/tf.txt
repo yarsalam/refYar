@@ -1,8 +1,0 @@
---find-links /tmp/wheels
---no-index
-
-tensorflow
-keras
-h5py
-opencv-python-headless
-deepface
