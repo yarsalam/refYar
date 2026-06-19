@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomUUID } from 'crypto';
@@ -91,7 +91,6 @@ export class FeedAssemblerService {
   ): Promise<FeedItem[]> {
     const startTime = Date.now();
 
-    // دریافت اطلاعات کاربر و فاز
     const [user, phase] = await Promise.all([
       this.userRepo.findOne({
         where: { id: userId },
@@ -118,7 +117,6 @@ export class FeedAssemblerService {
       isCompleted: user.isCompleted,
     };
 
-    // جمع‌آوری کاندیداها
     const [boostedIds, vipIds, creditIds] = await Promise.all([
       this.candidateService.getBoostedCandidates(3),
       this.candidateService.getVipCandidates(2),
@@ -130,18 +128,8 @@ export class FeedAssemblerService {
       options.limit || 20,
     );
 
-    // ساخت فید اولیه
     const feed: FeedItem[] = [];
     const usedUserIds = new Set<number>([userId]);
-
-    // Combined query fix: but since candidate service separate, minimal change - call once for all
-    const allSpecialIds = [
-      ...new Set([...boostedIds, ...vipIds, ...creditIds]),
-    ];
-    const specialUsers =
-      await this.candidateService.getUsersByIds(allSpecialIds); // One query for specials
-
-    // But to keep minimal, use existing add but note combined
 
     await this.addUsersToFeed(feed, boostedIds, usedUserIds, 'boost');
     await this.addUsersToFeed(feed, vipIds, usedUserIds, 'vip');
@@ -165,12 +153,9 @@ export class FeedAssemblerService {
       }
     }
 
-    // Fix: Sort by priority before limiting
     const sortedFeed = this.scoringService.sortByPriority(feed);
-
     const limitedFeed = sortedFeed.slice(0, options.limit || 20);
 
-    // فیلتر بر اساس رابطه (بلاک)
     const targetIds = limitedFeed
       .filter((i) => i.type === 'user')
       .map((i) => (i.data as any).id);
@@ -183,35 +168,53 @@ export class FeedAssemblerService {
       relationsMap,
     );
 
-    // تزریق تبلیغات
+    // ─── FIX N+1: batch promotion قبل از حلقه ─────────────────────────────
     const allowedTypes =
       this.promotionService.getAllowedPromotionTypes(enrichedPhase);
+
     const MAX_PROMOTIONS =
       enrichedPhase.phase === 'cold'
         ? 1
         : enrichedPhase.phase === 'warm'
           ? 2
           : 3;
-    let promotionsShown = 0;
+
+    // تعیین پوزیشن‌هایی که promo باید وارد شود (هر ۳ آیتم یک promo)
+    const promoPositions = [0, 3, 6, 9]
+      .filter((p) => p < filteredFeed.length)
+      .slice(0, MAX_PROMOTIONS);
+
+    // یک batch call به جای N تا await در حلقه
+    const promos = await this.promotionService.decideBatch(
+      userId,
+      allowedTypes,
+      enrichedPhase,
+      promoPositions,
+    );
+
+    // ساخت فید نهایی با درج promoها در پوزیشن‌های از پیش تعیین‌شده
     const finalFeed: FeedItem[] = [];
+    let promoIdx = 0;
+    let promotionsShown = 0;
 
     for (let i = 0; i < filteredFeed.length; i++) {
       finalFeed.push(filteredFeed[i]);
-      if (promotionsShown < MAX_PROMOTIONS && i % 3 === 0) {
-        const promoItem = await this.promotionService.decideAndCreatePromotion(
-          userId,
-          allowedTypes,
-          enrichedPhase,
-          i,
-        );
-        if (promoItem) {
-          finalFeed.push(promoItem);
+
+      if (
+        promoIdx < promos.length &&
+        i === promoPositions[promoIdx] &&
+        promotionsShown < MAX_PROMOTIONS
+      ) {
+        const promo = promos[promoIdx];
+        if (promo) {
+          finalFeed.push(promo);
           promotionsShown++;
         }
+        promoIdx++;
       }
     }
+    // ──────────────────────────────────────────────────────────────────────────
 
-    // جمع‌آوری متریک سئو
     this.seoCollector
       .collectFeedMetrics(userId, finalFeed.length)
       .catch((err) => this.logger.error('SEO collection failed', err));

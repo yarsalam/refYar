@@ -44,6 +44,7 @@ import { RetrievalModule } from './suggestion/retrieval/retrieval.module';
 import { AdminApiModule } from './admin-api/admin-api.module';
 import { PhaseModule } from './phase/phase.module';
 import { HealthController } from './app.controller';
+import { QdrantModule } from './qdrant/qdrant.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -92,6 +93,7 @@ import { HealthController } from './app.controller';
     DebugModule,
     RetrievalModule,
     AdminApiModule,
+    QdrantModule,
   ],
   providers: [RedisService],
   exports: [RedisService],

@@ -24,10 +24,10 @@ export class CreateAuthDto {
   @IsBoolean()
   isCompleted: boolean;
 
-  @ValidateIf((o: CreateAuthDto) => o.platform === 'web')
+  // @ValidateIf((o: CreateAuthDto) => o.platform === 'web')
   @IsString()
-  @IsNotEmpty({ message: 'توکن reCAPTCHA ضروری است' })
-  recaptchaToken: string = '';
+  // @IsNotEmpty({ message: 'توکن reCAPTCHA ضروری است' })
+  recaptchaToken?: string = '';
 
   @IsString()
   @IsIn(['web', 'mobile'], { message: 'پلتفرم نامعتبر است' })

@@ -14,18 +14,25 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
     }),
   );
   app.enableCors({
-    origin: [
-      'https://yourdomain.com',
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-    ], // آدرس فرانت
+    // origin: [
+    //   'https://yourdomain.com',
+    //   'http://localhost:3000',
+    //   'http://127.0.0.1:3000',
+    // ], // آدرس فرانت
+    origin: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type,Authorization',
-    credentials: true, // اگر کوکی ارسال می‌شود
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-device-id',
+      'x-platform', // ← اضافه کنید
+      'x-app-version', // ← اگر بعداً لازم شد
+    ],
+    credentials: true,
   });
   const config = new DocumentBuilder()
     .setTitle('Sugaro API Docs')

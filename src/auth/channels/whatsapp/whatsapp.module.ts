@@ -6,7 +6,7 @@ import { RedisModule } from 'src/redis/redis.module';
 import { AuthModule } from 'src/auth/auth.module';
 
 @Module({
-  imports: [OtpModule, RedisModule, forwardRef(() => AuthModule)],
+  imports: [OtpModule, RedisModule],
   controllers: [WhatsAppController],
   providers: [WhatsAppService],
   exports: [WhatsAppService],

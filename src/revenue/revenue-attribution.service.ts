@@ -21,6 +21,15 @@ export interface LTVResult {
   paybackPeriod: number;
 }
 
+export interface AnomalyResult {
+  date: string;
+  actualRevenue: number;
+  expectedRevenue: number;
+  deviation: number;
+  isAnomaly: boolean;
+  reason?: string;
+}
+
 const DEFAULT_SOURCE_WEIGHTS = {
   organic: 1.0,
   instagram: 1.2,
@@ -29,6 +38,9 @@ const DEFAULT_SOURCE_WEIGHTS = {
   direct: 0.9,
   referral: 1.0,
 };
+
+// ─── ثابت‌ها برای anomaly detection ─────────────────────────────────────────
+const ANOMALY_THRESHOLD = 0.2; // ۲۰٪ انحراف = anomaly
 
 @Injectable()
 export class RevenueAttributionService {
@@ -83,7 +95,7 @@ export class RevenueAttributionService {
 
     for (const user of users) {
       const source = user.metadata?.acquisitionSource || 'organic';
-      const weight = await this.getSourceWeight(source); // 🆕
+      const weight = await this.getSourceWeight(source);
 
       if (!sources[source]) {
         sources[source] = { users: 0, revenue: 0, totalWeight: 0 };
@@ -101,7 +113,7 @@ export class RevenueAttributionService {
       const cac = await this.getCACForSource(source, days);
       const avgWeight = data.users > 0 ? data.totalWeight / data.users : 1;
       const rawLTV = data.revenue / data.users;
-      const adjustedLTV = rawLTV * avgWeight; // 🆕 LTV تعدیل‌شده با وزن منبع
+      const adjustedLTV = rawLTV * avgWeight;
 
       result.push({
         source,
@@ -117,7 +129,6 @@ export class RevenueAttributionService {
   }
 
   private async getCACForSource(source: string, days: number): Promise<number> {
-    // محاسبه هزینه جذب از فعالیت‌های سئو
     const activities = await this.seoActivityRepo.find({
       where: {
         performedAt: Between(
@@ -130,7 +141,6 @@ export class RevenueAttributionService {
 
     const totalCost = activities.reduce((sum, a) => sum + Number(a.cost), 0);
 
-    // تعداد کاربرانی که از این سورس اومدن
     const userCount = await this.userRepo.count({
       where: {
         metadata: {
@@ -154,6 +164,108 @@ export class RevenueAttributionService {
   }
 
   /**
+   * آنالیز anomaly درآمد ۳۰ روز گذشته
+   *
+   * FIX N+1 (خط ۲۵۵ قدیم): به جای ۹۰ query جداگانه (۳ query × ۳۰ روز)،
+   * یک GROUP BY query برای همه داده‌ها می‌زنیم و روی Map حساب می‌کنیم.
+   */
+  async detectRevenueAnomalies(): Promise<AnomalyResult[]> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // ─── یک query برای همه درآمد ۳۰ روزه ───────────────────────────────────
+    const dailyRevenueRows = await this.paymentRepo
+      .createQueryBuilder('p')
+      .select('DATE(p.createdAt)', 'date')
+      .addSelect('SUM(p.amount)', 'total')
+      .addSelect('COUNT(*)', 'txCount')
+      .where('p.createdAt >= :start', { start: thirtyDaysAgo })
+      .andWhere("p.status = 'success'")
+      .groupBy('DATE(p.createdAt)')
+      .orderBy('DATE(p.createdAt)', 'ASC')
+      .getRawMany<{ date: string; total: string; txCount: string }>();
+
+    // ─── یک query برای refund/cancellation ها (برای reason detection) ───────
+    const dailyRefundRows = await this.paymentRepo
+      .createQueryBuilder('p')
+      .select('DATE(p.createdAt)', 'date')
+      .addSelect('COUNT(*)', 'refundCount')
+      .where('p.createdAt >= :start', { start: thirtyDaysAgo })
+      .andWhere("p.status IN ('refunded', 'cancelled')")
+      .groupBy('DATE(p.createdAt)')
+      .getRawMany<{ date: string; refundCount: string }>();
+
+    // Map برای O(1) lookup
+    const revenueMap = new Map(
+      dailyRevenueRows.map((r) => [r.date, parseFloat(r.total)]),
+    );
+    const txCountMap = new Map(
+      dailyRevenueRows.map((r) => [r.date, parseInt(r.txCount)]),
+    );
+    const refundMap = new Map(
+      dailyRefundRows.map((r) => [r.date, parseInt(r.refundCount)]),
+    );
+
+    // ─── محاسبه میانگین ۳۰ روزه به عنوان baseline expected ─────────────────
+    const allRevenues = [...revenueMap.values()];
+    const avgRevenue =
+      allRevenues.length > 0
+        ? allRevenues.reduce((sum, v) => sum + v, 0) / allRevenues.length
+        : 0;
+
+    // ─── حلقه بدون query — فقط Map lookup ───────────────────────────────────
+    const results: AnomalyResult[] = [];
+
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(thirtyDaysAgo);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const actualRevenue = revenueMap.get(dateStr) ?? 0;
+      // expected = میانگین کل (می‌توان با moving average جایگزین کرد)
+      const expectedRevenue = avgRevenue;
+      const deviation =
+        expectedRevenue > 0
+          ? (actualRevenue - expectedRevenue) / expectedRevenue
+          : 0;
+      const isAnomaly = Math.abs(deviation) > ANOMALY_THRESHOLD;
+
+      let reason: string | undefined;
+      if (isAnomaly) {
+        // تشخیص دلیل از داده‌های از پیش fetch‌شده — بدون query اضافه
+        const refundCount = refundMap.get(dateStr) ?? 0;
+        const txCount = txCountMap.get(dateStr) ?? 0;
+
+        if (actualRevenue === 0 && txCount === 0) {
+          reason = 'no_transactions';
+        } else if (refundCount > txCount * 0.3) {
+          reason = 'high_refund_rate';
+        } else if (deviation < -ANOMALY_THRESHOLD) {
+          reason = 'revenue_drop';
+        } else {
+          reason = 'revenue_spike';
+        }
+      }
+
+      results.push({
+        date: dateStr,
+        actualRevenue,
+        expectedRevenue,
+        deviation,
+        isAnomaly,
+        reason,
+      });
+    }
+
+    const anomalyCount = results.filter((r) => r.isAnomaly).length;
+    this.logger.log(
+      `Revenue anomaly detection: ${anomalyCount} anomalies in last 30 days (2 queries total)`,
+    );
+
+    return results;
+  }
+
+  /**
    * پیش‌بینی LTV کاربر جدید
    */
   async predictLTV(userId: number): Promise<number> {
@@ -173,7 +285,7 @@ export class RevenueAttributionService {
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
       this.logger.error('ML prediction failed, using fallback: ' + message);
-      // fallback به روش قبلی
+
       const user = await this.userRepo.findOne({ where: { id: userId } });
       if (!user) return 0;
       const similarUsers = await this.userRepo
@@ -183,7 +295,7 @@ export class RevenueAttributionService {
         .andWhere('user.gender = :gender', { gender: user.gender })
         .getMany();
 
-      if (similarUsers.length === 0) return 150; // fallback
+      if (similarUsers.length === 0) return 150;
 
       const totalLTV = similarUsers.reduce((sum, u) => {
         const userRevenue =

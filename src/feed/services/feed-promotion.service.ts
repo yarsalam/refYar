@@ -245,4 +245,17 @@ export class FeedPromotionService {
       score: decision.score,
     };
   }
+
+  async decideBatch(
+    userId: number,
+    allowedTypes: string[],
+    phase: FeedPhase,
+    positions: number[],
+  ): Promise<(FeedItem | null)[]> {
+    return Promise.all(
+      positions.map((pos) =>
+        this.decideAndCreatePromotion(userId, allowedTypes, phase, pos),
+      ),
+    );
+  }
 }

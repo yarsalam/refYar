@@ -124,7 +124,28 @@ export class UserMetricsService {
     return { retentionDays, boostUsed7d, pastPayments, messages7d, views7d };
   }
 
+  // ✅ واقعی: شیب تعامل 7 روز اخیر vs 7 روز قبل از آن
   async getEngagementSlope(userId: number): Promise<number> {
-    return 0.7; // TODO: implement real logic
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
+
+    const [recent, previous] = await Promise.all([
+      this.activityRepo.count({
+        where: { userId, createdAt: { $gte: sevenDaysAgo } as any },
+      }),
+      this.activityRepo.count({
+        where: {
+          userId,
+          createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo } as any,
+        },
+      }),
+    ]);
+
+    if (previous === 0) return recent > 0 ? 1 : 0.5;
+
+    // normalize: slope بین 0 و 1
+    const ratio = recent / previous;
+    return Math.min(Math.max(Math.round(ratio * 50) / 100, 0), 1);
   }
 }

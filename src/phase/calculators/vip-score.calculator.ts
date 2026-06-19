@@ -5,6 +5,7 @@ import { UserEventLogs } from '../../user-event/entities/user-event.entity';
 import { Message } from '../../message/entities/message.entity';
 import { InteractionsService } from '../../interaction/interaction.service';
 import { UserMetricsService } from '../../user-metrics/user-metrics.service';
+import { User } from 'src/users/entities/user.entity';
 
 @Injectable()
 export class VipScoreCalculator {
@@ -14,6 +15,9 @@ export class VipScoreCalculator {
 
     @InjectRepository(Message)
     private readonly messageRepo: Repository<Message>,
+
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
 
     private readonly interactionsService: InteractionsService,
     private readonly metricsService: UserMetricsService,
@@ -27,6 +31,7 @@ export class VipScoreCalculator {
         where: { from_id: userId },
         order: { created_at: 'DESC' },
         take: 200,
+        select: ['content'],
       }),
     ]);
 
@@ -45,37 +50,94 @@ export class VipScoreCalculator {
     const messageDepth = Math.min((avgLength / 100) * 100, 100);
 
     const slope = await this.metricsService.getEngagementSlope(userId);
-    const guidanceCompletion = 0.7;
-    const learningScore =
-      featureDiversity * 0.25 +
-      likeToMatchRate * 0.25 +
-      messageDepth * 0.2 +
-      guidanceCompletion * 0.2 +
-      slope * 0.1;
 
-    return Math.round(learningScore * 100) / 100;
+    // guidanceCompletion: نسبت event های راهنما به کل
+    const guidanceEvents = events.filter((e) =>
+      ['profile_view', 'help_opened', 'tutorial_step'].includes(e.type),
+    ).length;
+    const guidanceCompletion = Math.min(guidanceEvents / 5, 1);
+
+    return (
+      Math.round(
+        (featureDiversity * 0.25 +
+          likeToMatchRate * 0.25 +
+          messageDepth * 0.2 +
+          guidanceCompletion * 0.2 +
+          slope * 0.1) *
+          100,
+      ) / 100
+    );
   }
 
   async getProfileCompleteness(userId: number): Promise<number> {
-    // همان placeholder اصلی
-    return 0.7; // TODO: از ProblemDetectorService
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: [
+        'id',
+        'nickname',
+        'gender',
+        'city',
+        'birth_year',
+        'aboutme',
+        'hobbies_self',
+        'values_self',
+        'isFaceVerified',
+        'education',
+        'marital',
+      ],
+    });
+    if (!user) return 0;
+
+    const fields = [
+      !!user.nickname,
+      !!user.gender,
+      !!user.city,
+      !!user.birth_year,
+      (user.aboutme?.length ?? 0) > 20,
+      (user.hobbies_self?.length ?? 0) > 0,
+      (user.values_self?.length ?? 0) > 0,
+      !!user.isFaceVerified,
+      !!user.education,
+      !!user.marital,
+    ];
+
+    const filled = fields.filter(Boolean).length;
+    return Math.round((filled / fields.length) * 100) / 100;
   }
 
   async getSentimentScore(userId: number): Promise<number> {
-    // همان placeholder اصلی
-    return 0.5; // TODO: از PersonalityService
+    const interactions =
+      await this.interactionsService.getUserInteractions(userId);
+    if (!interactions.length) return 0.5;
+
+    const positive = interactions.filter(
+      (i) => i.type === 'like' || i.type === 'match' || i.type === 'superlike',
+    ).length;
+    const negative = interactions.filter((i) => i.type === 'skip').length;
+
+    const total = positive + negative;
+    if (total === 0) return 0.5;
+
+    // normalize بین 0.2 و 0.9
+    const raw = positive / total;
+    return Math.round((0.2 + raw * 0.7) * 100) / 100;
   }
 
+  // ✅ N+1 fix: learningScore یک‌بار محاسبه می‌شود و پاس داده می‌شود
   async calculateVipScores(
     userId: number,
     weights: any,
+    precomputedLearningScore?: number,
   ): Promise<{ learning: number; profile: number; sentiment: number }> {
     const [learningScore, profileCompleteness, sentimentScore] =
       await Promise.all([
-        this.calculateLearningScore(userId),
+        precomputedLearningScore !== undefined
+          ? Promise.resolve(precomputedLearningScore)
+          : this.calculateLearningScore(userId),
         this.getProfileCompleteness(userId),
         this.getSentimentScore(userId),
       ]);
+
     return {
       learning: learningScore * (weights.learningScore || 0),
       profile: profileCompleteness * (weights.profileCompleteness || 0),

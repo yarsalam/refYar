@@ -8,7 +8,11 @@ import {
 } from 'typeorm';
 import { User } from 'src/users/entities/user.entity';
 
+import { Index } from 'typeorm';
+
 @Entity()
+@Index(['deviceId'])
+@Index(['user', 'deviceId'], { unique: true })
 export class UserDevice {
   @PrimaryGeneratedColumn()
   id: number;

@@ -11,6 +11,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
@@ -18,6 +19,11 @@ import {
 } from 'typeorm';
 
 @Entity()
+@Index(['status'])
+@Index(['gender', 'status'])
+@Index(['city', 'gender', 'status'])
+@Index(['createdAt'])
+@Index(['isFaceVerified', 'status'])
 export class User {
   @PrimaryGeneratedColumn()
   id!: number;

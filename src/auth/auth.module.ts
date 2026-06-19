@@ -24,6 +24,7 @@ import { FeatureStoreModule } from '../feature-store/feature-store.module';
 import { AuthRegistrationService } from './services/auth-registration.service';
 import { AuthLoginService } from './services/auth-login.service';
 import { AuthProfileService } from './services/auth-profile.service';
+import { DebugAuthController } from './debug-auth.controller';
 
 @Module({
   imports: [
@@ -54,7 +55,7 @@ import { AuthProfileService } from './services/auth-profile.service';
     JwtStrategy,
     RecaptchaService,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, DebugAuthController],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

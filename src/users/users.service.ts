@@ -71,4 +71,8 @@ export class UsersService {
   async findByIds(ids: number[], options?: any): Promise<User[]> {
     return this.crud.findByIds(ids, options);
   }
+
+  async updateDirect(id: number, dto: UpdateUserDto): Promise<void> {
+    return this.crud.updateDirect(id, dto);
+  }
 }

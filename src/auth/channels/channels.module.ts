@@ -8,6 +8,6 @@ import { RedisModule } from 'src/redis/redis.module';
 @Module({
   providers: [ChannelFactory, TelegramService, TelegramHelper],
   exports: [ChannelFactory],
-  imports: [forwardRef(() => WhatsappModule), RedisModule],
+  imports: [WhatsappModule, RedisModule],
 })
 export class ChannelsModule {}

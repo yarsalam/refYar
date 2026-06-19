@@ -1,7 +1,8 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
+import { QdrantClient } from '@qdrant/js-client-rest';
 import { UserFeatureSnapshot } from './entities/user-feature.entity';
 import { User } from '../users/entities/user.entity';
 import { PersonalityService } from '../personality/personality.service';
@@ -9,7 +10,10 @@ import { UserEventService } from '../user-event/user-event.service';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/redis/redis.constants';
 
+// ─── ثابت‌ها ────────────────────────────────────────────────────────────────
+
 const CACHE_KEY_PREFIX = 'feature_snapshot';
+const QDRANT_COLLECTION = 'user_vectors';
 
 const DEFAULT_PROFILE_WEIGHTS = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 const DEFAULT_BEHAVIOR_WEIGHTS = [1, 1, 1, 1, 1];
@@ -17,9 +21,39 @@ const DEFAULT_PERSONALITY_WEIGHTS = [1, 1, 1, 1, 1];
 
 const REFRESH_CONCURRENCY = 10;
 
+/**
+ * ابعاد هر segment — باید با مقادیر encodeProfile/encodeBehavior/... یکسان باشد
+ */
+const VECTOR_DIMS = {
+  profile: 10,
+  behavior: 5,
+  personality: 5,
+  geo: 2,
+  total: 22, // 10 + 5 + 5 + 2
+} as const;
+
+/**
+ * وزن هر segment در similarity search
+ * از sqrt استفاده می‌شود تا cosine similarity همان weighted distance را شبیه‌سازی کند
+ */
+const SEGMENT_WEIGHTS = {
+  profile: Math.sqrt(0.5), // 0.7071
+  behavior: Math.sqrt(0.3), // 0.5477
+  personality: Math.sqrt(0.2), // 0.4472
+  geo: 1.0, // geo فعلاً بدون وزن اضافه
+} as const;
+
+// ─── سرویس ──────────────────────────────────────────────────────────────────
+
 @Injectable()
-export class FeatureStoreService {
+export class FeatureStoreService implements OnModuleInit {
   private readonly logger = new Logger(FeatureStoreService.name);
+
+  // ─── FIX مشکل ۳: QdrantClient inject می‌شود، نه hardcode ──────────────────
+  private readonly qdrant = new QdrantClient({
+    host: process.env.QDRANT_HOST ?? 'qdrant',
+    port: parseInt(process.env.QDRANT_PORT ?? '6333'),
+  });
 
   constructor(
     @InjectRepository(UserFeatureSnapshot)
@@ -35,6 +69,36 @@ export class FeatureStoreService {
     private readonly userEventService: UserEventService,
   ) {}
 
+  // ─── FIX مشکل ۳: Collection را در startup بساز ──────────────────────────
+
+  async onModuleInit(): Promise<void> {
+    try {
+      const exists = await this.qdrant.collectionExists(QDRANT_COLLECTION);
+      if (!exists) {
+        await this.qdrant.createCollection(QDRANT_COLLECTION, {
+          vectors: {
+            size: VECTOR_DIMS.total, // ← 22 بُعد
+            distance: 'Cosine',
+          },
+          optimizers_config: {
+            memmap_threshold: 20_000,
+          },
+          hnsw_config: {
+            m: 16,
+            ef_construct: 200,
+          },
+        });
+        this.logger.log(
+          `Qdrant collection "${QDRANT_COLLECTION}" created (${VECTOR_DIMS.total} dims)`,
+        );
+      }
+    } catch (err) {
+      this.logger.error('Failed to init Qdrant collection:', err);
+    }
+  }
+
+  // ─── Cache helpers ────────────────────────────────────────────────────────
+
   private cacheKey(userId: number): string {
     return `${CACHE_KEY_PREFIX}:${userId}`;
   }
@@ -48,6 +112,8 @@ export class FeatureStoreService {
     await this.redis.set(redisKey, JSON.stringify(defaults));
     return defaults;
   }
+
+  // ─── Public API ───────────────────────────────────────────────────────────
 
   async getUserFeatures(userId: number): Promise<UserFeatureSnapshot> {
     const cached = await this.redis.get(this.cacheKey(userId));
@@ -78,8 +144,55 @@ export class FeatureStoreService {
     return map;
   }
 
+  buildMergedVector(
+    profileVector: number[],
+    behaviorVector: number[],
+    personalityVector: number[],
+    geoVector: number[],
+  ): number[] {
+    return [
+      ...profileVector.map((v) => v * SEGMENT_WEIGHTS.profile),
+      ...behaviorVector.map((v) => v * SEGMENT_WEIGHTS.behavior),
+      ...personalityVector.map((v) => v * SEGMENT_WEIGHTS.personality),
+      ...geoVector.map((v) => v * SEGMENT_WEIGHTS.geo),
+    ];
+  }
+
+  async upsertToQdrant(
+    userId: number,
+    profileVector: number[],
+    behaviorVector: number[],
+    personalityVector: number[],
+    geoVector: number[],
+    payload?: Record<string, unknown>,
+  ): Promise<void> {
+    const mergedVector = this.buildMergedVector(
+      profileVector,
+      behaviorVector,
+      personalityVector,
+      geoVector,
+    );
+
+    await this.qdrant.upsert(QDRANT_COLLECTION, {
+      wait: true,
+      points: [
+        {
+          id: userId,
+          vector: mergedVector,
+          payload: {
+            userId,
+            updatedAt: new Date().toISOString(),
+            ...payload,
+          },
+        },
+      ],
+    });
+  }
+
+  // ─── Cron: Refresh ────────────────────────────────────────────────────────
+
   @Cron('*/35 * * * *')
-  async refreshAllFeatures() {
+  async refreshAllFeatures(): Promise<void> {
     const lockKey = 'lock:refresh_features';
     const locked = await this.redis.set(lockKey, '1', 'EX', 300, 'NX');
     if (!locked) {
@@ -110,11 +223,8 @@ export class FeatureStoreService {
 
   private async refreshUserFeatures(userId: number): Promise<void> {
     try {
-      let user: any;
-      try {
-        user = await this.userRepo.findOne({ where: { id: userId } });
-        if (!user) throw new Error('not found');
-      } catch {
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      if (!user) {
         this.logger.warn(`User ${userId} not found, skipping refresh`);
         return;
       }
@@ -150,6 +260,7 @@ export class FeatureStoreService {
       const behaviorVector = await this.encodeBehavior(events);
       const personalityVector = await this.encodePersonality(personality);
       const geoVector = this.encodeGeo(user);
+
       const existing = await this.featureRepo.findOne({ where: { userId } });
 
       const features = this.featureRepo.create({
@@ -170,12 +281,28 @@ export class FeatureStoreService {
 
       await this.featureRepo.save(features);
       await this.redis.del(this.cacheKey(userId));
+
+      // ─── FIX: push به Qdrant بعد از save ─────────────────────────────────
+      await this.upsertToQdrant(
+        userId,
+        profileVector,
+        behaviorVector,
+        personalityVector,
+        geoVector,
+        {
+          phase: user.phase ?? 'cold',
+          gender: user.gender,
+          city: user.city ?? null,
+        },
+      );
     } catch (error) {
       this.logger.error(
         `Failed to refresh features for user ${userId}: ${error}`,
       );
     }
   }
+
+  // ─── Preference Learning ─────────────────────────────────────────────────
 
   async updatePreferenceVector(
     uid: number,
@@ -198,6 +325,53 @@ export class FeatureStoreService {
     );
     await this.redis.del(this.cacheKey(uid));
   }
+
+  // ─── Feature Weight Learning ──────────────────────────────────────────────
+
+  async learnFeatureWeights(
+    userId: number,
+    event: 'purchase' | 'match' | 'message' | 'profile_completed' | 'block',
+  ): Promise<void> {
+    if (event === 'block') {
+      const weights = await this.getWeightArray(
+        'feature:weights:behavior',
+        DEFAULT_BEHAVIOR_WEIGHTS,
+      );
+      weights[3] = Math.max(0.1, weights[3] - 0.01);
+      await this.redis.set('feature:weights:behavior', JSON.stringify(weights));
+      this.logger.log('Block event: decreased response weight for behavior');
+
+      // ─── FIX مشکل ۴: بعد از weight update، vector کاربر را هم refresh کن ─
+      await this.refreshUserFeatures(userId);
+      return;
+    }
+
+    const weightMap: Record<string, { key: string; index: number }> = {
+      purchase: { key: 'feature:weights:behavior', index: 2 },
+      match: { key: 'feature:weights:behavior', index: 4 },
+      message: { key: 'feature:weights:behavior', index: 3 },
+      profile_completed: { key: 'feature:weights:profile', index: 5 },
+    };
+
+    const target = weightMap[event];
+    if (!target) return;
+
+    const defaults = target.key.includes('profile')
+      ? DEFAULT_PROFILE_WEIGHTS
+      : DEFAULT_BEHAVIOR_WEIGHTS;
+
+    const weights = await this.getWeightArray(target.key, defaults);
+    weights[target.index] = Math.max(0.1, weights[target.index] + 0.01);
+    await this.redis.set(target.key, JSON.stringify(weights));
+    this.logger.log(
+      `Weight ${target.key}[${target.index}] adjusted for event: ${event}`,
+    );
+
+    // ─── FIX مشکل ۴: refresh vector در Qdrant ─────────────────────────────
+    await this.refreshUserFeatures(userId);
+  }
+
+  // ─── Encode helpers ───────────────────────────────────────────────────────
 
   private async encodeProfile(user: any): Promise<number[]> {
     const weights = await this.getWeightArray(
@@ -265,47 +439,14 @@ export class FeatureStoreService {
   }
 
   private encodeGeo(user: any): number[] {
+    // TODO: lat/lng واقعی از user profile
     return [0, 0];
   }
+
+  // ─── Utility ──────────────────────────────────────────────────────────────
 
   async getProfileVector(userId: number): Promise<number[] | null> {
     const features = await this.getUserFeatures(userId);
     return features?.profileVector || null;
-  }
-
-  async learnFeatureWeights(
-    userId: number,
-    event: 'purchase' | 'match' | 'message' | 'profile_completed' | 'block',
-  ): Promise<void> {
-    if (event === 'block') {
-      const weights = await this.getWeightArray(
-        'feature:weights:behavior',
-        DEFAULT_BEHAVIOR_WEIGHTS,
-      );
-      weights[3] = Math.max(0.1, weights[3] - 0.01);
-      await this.redis.set('feature:weights:behavior', JSON.stringify(weights));
-      this.logger.log('Block event: decreased response weight for behavior');
-      return;
-    }
-
-    const weightMap: Record<string, { key: string; index: number }> = {
-      purchase: { key: 'feature:weights:behavior', index: 2 },
-      match: { key: 'feature:weights:behavior', index: 4 },
-      message: { key: 'feature:weights:behavior', index: 3 },
-      profile_completed: { key: 'feature:weights:profile', index: 5 },
-    };
-
-    const target = weightMap[event];
-    if (!target) return;
-
-    const defaults = target.key.includes('profile')
-      ? DEFAULT_PROFILE_WEIGHTS
-      : DEFAULT_BEHAVIOR_WEIGHTS;
-    const weights = await this.getWeightArray(target.key, defaults);
-    weights[target.index] = Math.max(0.1, weights[target.index] + 0.01);
-    await this.redis.set(target.key, JSON.stringify(weights));
-    this.logger.log(
-      `Weight ${target.key}[${target.index}] adjusted for event: ${event}`,
-    );
   }
 }

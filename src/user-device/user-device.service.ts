@@ -4,31 +4,6 @@ import { Repository, MoreThan } from 'typeorm';
 import { CreateUserDeviceDto } from './dto/create-user-device.dto';
 import { UserDevice } from './entities/user-device.entity';
 import { User } from 'src/users/entities/user.entity';
-import * as geoip from 'geoip-lite';
-
-type GeoLookupResult = {
-  range: [number, number];
-  country: string;
-  region: string;
-  city: string;
-  ll: [number, number];
-  timezone?: string;
-} | null;
-
-function safeGeoLookup(ip: string): GeoLookupResult {
-  const result = geoip.lookup(ip);
-
-  if (
-    result &&
-    typeof result === 'object' &&
-    'country' in result &&
-    'city' in result
-  ) {
-    return result as GeoLookupResult;
-  }
-
-  return null;
-}
 
 @Injectable()
 export class UserDeviceService {
@@ -39,37 +14,68 @@ export class UserDeviceService {
     private readonly userRepo: Repository<User>,
   ) {}
 
+  // async createOrUpdateToken(dto: CreateUserDeviceDto): Promise<UserDevice> {
+  //   const userRef = { id: dto.userId } as User;
+
+  //   const deviceData = {
+  //     user: userRef,
+  //     ipAddress: dto.ipAddress,
+  //     platform: dto.platform,
+  //     model: dto.model ?? 'unknown',
+  //     brand: dto.brand ?? 'unknown',
+  //     deviceId: dto.deviceId,
+  //     osVersion: dto.osVersion,
+  //     appVersion: dto.appVersion,
+  //     country: dto.country,
+  //     city: dto.city,
+  //     isVPN: dto.isVpn,
+  //     isOnline: true,
+  //   };
+
+  //   const existing = await this.userDeviceRepo.findOne({
+  //     where: { user: { id: dto.userId }, deviceId: dto.deviceId },
+  //   });
+
+  //   if (existing) {
+  //     Object.assign(existing, deviceData);
+  //     return this.userDeviceRepo.save(existing);
+  //   }
+
+  //   const newDevice = this.userDeviceRepo.create(deviceData);
+  //   return this.userDeviceRepo.save(newDevice);
+  // }
   async createOrUpdateToken(dto: CreateUserDeviceDto): Promise<UserDevice> {
-    const user = await this.userRepo.findOne({ where: { id: dto.userId } });
-    if (!user) throw new Error('User not found');
-    const deviceData = {
-      user,
-      ipAddress: dto.ipAddress,
-      platform: dto.platform,
-      model: dto.model ?? 'unknown',
-      brand: dto.brand ?? 'unknown',
-      deviceId: dto.deviceId,
-      osVersion: dto.osVersion,
-      appVersion: dto.appVersion,
-      country: dto.country,
-      city: dto.city,
-      isVPN: dto.isVpn,
+    const values: any = {
+      user: { id: dto.userId },
       isOnline: true,
     };
+    if (dto.ipAddress) values.ipAddress = dto.ipAddress;
+    if (dto.platform) values.platform = dto.platform;
+    if (dto.model) values.model = dto.model;
+    if (dto.brand) values.brand = dto.brand;
+    if (dto.deviceId) values.deviceId = dto.deviceId;
+    if (dto.osVersion) values.osVersion = dto.osVersion;
+    if (dto.appVersion) values.appVersion = dto.appVersion;
+    if (dto.country) values.country = dto.country;
+    if (dto.city) values.city = dto.city;
+    if (dto.isVpn !== undefined) values.isVPN = dto.isVpn;
 
-    const existing = await this.userDeviceRepo.findOne({
-      where: { user: { id: user.id }, deviceId: dto.deviceId },
+    await this.userDeviceRepo
+      .createQueryBuilder()
+      .insert()
+      .into(UserDevice)
+      .values(values)
+      .orUpdate(
+        Object.keys(values).filter((k) => k !== 'user'), // ستون‌های بروزرسانی
+        ['userId', 'deviceId'], // ستون‌های تضاد
+      )
+      .execute();
+
+    return this.userDeviceRepo.findOneOrFail({
+      where: { user: { id: dto.userId }, deviceId: dto.deviceId },
+      select: ['id'],
     });
-
-    if (existing) {
-      Object.assign(existing, deviceData);
-      return await this.userDeviceRepo.save(existing);
-    }
-
-    const newDevice = this.userDeviceRepo.create(deviceData);
-    return await this.userDeviceRepo.save(newDevice);
   }
-
   async countRequestsByIp(ip: string, sinceMinutes = 30): Promise<number> {
     const since = new Date(Date.now() - sinceMinutes * 60 * 1000);
     return this.userDeviceRepo.count({

@@ -1,4 +1,4 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Logger, Post, Body } from '@nestjs/common';
 import { TelegramService } from './telegram.service';
 import { OtpService } from 'src/auth/otp/otp.service';
 import { VerifyCodeDto } from 'src/auth/dto/verify-code.dto';
@@ -6,6 +6,8 @@ import { RedisService } from 'src/redis/redis.service';
 
 @Controller('telegram/webhook')
 export class TelegramController {
+  private readonly logger = new Logger(TelegramController.name);
+
   constructor(
     private readonly telegramService: TelegramService,
     private readonly otpService: OtpService,
@@ -16,31 +18,23 @@ export class TelegramController {
   async handleUpdate(@Body() update: any) {
     const chatId = update.message?.chat?.id;
     const text = update.message?.text?.trim();
-
     if (!chatId || !text) return 'NO_DATA';
 
     let phone: string | null = null;
-
     if (text.startsWith('/start')) {
       const parts = text.split(' ');
-      if (parts.length > 1) {
-        phone = parts[1];
-      }
+      if (parts.length > 1) phone = parts[1];
     }
-
-    if (!phone) {
-      return 'NO_PHONE';
-    }
+    if (!phone) return 'NO_PHONE';
 
     await this.telegramService.saveChatId(phone, chatId);
 
     let code = await this.redis.get(`otp:${phone}`);
-
     if (!code) {
       code = await this.otpService.generate(phone);
       await this.telegramService.sendCode(phone, code);
     } else {
-      console.log('⏳ OTP already exists, not resending');
+      this.logger.debug(`OTP already exists for ${phone}, not resending`);
     }
 
     return 'OK';

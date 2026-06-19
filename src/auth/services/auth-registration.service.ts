@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { UsersService } from '../../users/users.service';
@@ -23,9 +24,21 @@ import { CreateAuthDto } from '../dto/create-auth.dto';
 import { CompleteProfileDto } from '../dto/complete-profile.dto';
 import { UpdateUserDto } from '../../users/dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { User } from 'src/users/entities/user.entity';
+
+// 🕒 helper امن برای اندازه‌گیری زمان (بدون state سراسری)
+function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const start = performance.now();
+  return fn().finally(() =>
+    console.log(`${label}: ${(performance.now() - start).toFixed(1)}ms`),
+  );
+}
 
 @Injectable()
 export class AuthRegistrationService {
+  private readonly logger = new Logger(AuthRegistrationService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -40,10 +53,14 @@ export class AuthRegistrationService {
   ) {}
 
   async step1(createAuthDto: CreateAuthDto, req: Request) {
+    const totalStart = Date.now();
+
     try {
-      const existingUser = await this.usersService.findByPhone(
-        createAuthDto.phone,
+      // ۱. پیدا کردن کاربر
+      const existingUser = await timed('findByPhone', () =>
+        this.usersService.findByPhone(createAuthDto.phone),
       );
+
       if (existingUser?.isCompleted) {
         throw new HttpException(
           { message: 'این شماره قبلاً ثبت‌نام کرده.', code: 'EXISTING_USER' },
@@ -53,50 +70,77 @@ export class AuthRegistrationService {
 
       const { recaptchaToken, platform, ...userData } = createAuthDto;
 
-      let user;
+      let user: User;
       if (existingUser) {
-        user = await this.usersService.update(existingUser.id, userData);
+        // فقط یک UPDATE ساده (updateDirect) + merge محلی
+        await timed('updateUser', () =>
+          this.usersService.updateDirect(existingUser.id, userData),
+        );
+        Object.assign(existingUser, userData);
+        user = existingUser;
       } else {
-        user = await this.usersService.create({
-          ...userData,
-          metadata: { acquisitionSource: req.headers['referer'] || 'direct' },
-        });
-        await this.userPhonesService.addFirstPhone(
-          user.id,
-          createAuthDto.phone,
+        user = await timed('createUser', () =>
+          this.usersService.create({
+            ...userData,
+            metadata: { acquisitionSource: req.headers['referer'] || 'direct' },
+          }),
         );
       }
 
-      await this.userEventService.log({
-        userId: user.id,
-        type: EventType.LOGIN,
-        metadata: { via: 'signup', platform: createAuthDto.platform },
-      });
+      // ۲. عملیات مستقل
+      const ci = (req as any).clientInfo || {};
+      const deviceId =
+        ci.deviceId ||
+        `srv_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
-      const ci = (req as any).clientInfo!;
-      const device = await this.userDeviceService.createOrUpdateToken({
-        userId: user.id,
-        userAgent: req.headers['user-agent'] as string,
-        ipAddress: ci.ip,
-        deviceId: ci.deviceId!,
-        platform: ['web', 'mobile'].includes(ci.platform ?? '')
-          ? (ci.platform as 'web' | 'mobile')
-          : undefined,
-        brand: ci.brand,
-        model: ci.model,
-        osVersion: ci.osVersion,
-        appVersion: ci.appVersion,
-        country: ci.country,
-        city: ci.city,
-        isVpn: ci.isVpn,
-      });
+      // افزودن شماره تلفن (فقط کاربر جدید)
+      if (!existingUser) {
+        await timed('addFirstPhone', () =>
+          this.userPhonesService.addFirstPhone(user.id, createAuthDto.phone),
+        );
+      }
 
-      await this.devicePhoneService.logEvent({
-        device,
-        phone: createAuthDto.phone,
-        event: DevicePhoneEvent.SEEN,
-      });
+      // رویداد login (fire‑and‑forget)
+      this.userEventService
+        .log({
+          userId: user.id,
+          type: EventType.LOGIN,
+          metadata: { via: 'signup', platform: createAuthDto.platform },
+        })
+        .catch((err) => console.error('Event log failed', err));
 
+      // ساخت/بروزرسانی دستگاه
+      const device = await timed('createOrUpdateDevice', () =>
+        this.userDeviceService.createOrUpdateToken({
+          userId: user.id,
+          userAgent: (req.headers['user-agent'] as string) || 'unknown',
+          ipAddress: ci.ip || '0.0.0.0',
+          deviceId,
+          platform: ['web', 'mobile'].includes(ci.platform ?? '')
+            ? (ci.platform as 'web' | 'mobile')
+            : 'web',
+          brand: ci.brand,
+          model: ci.model,
+          osVersion: ci.osVersion,
+          appVersion: ci.appVersion,
+          country: ci.country,
+          city: ci.city,
+          isVpn: ci.isVpn,
+        }),
+      );
+
+      // ۳. ثبت ارتباط دستگاه-شماره (حالا fire‑and‑forget)
+      if (device) {
+        this.devicePhoneService
+          .logEvent({
+            device,
+            phone: createAuthDto.phone,
+            event: DevicePhoneEvent.SEEN,
+          })
+          .catch((err) => console.error('devicePhone logEvent failed', err));
+      }
+
+      console.log(`[step1] TOTAL TIME: ${Date.now() - totalStart}ms`);
       return;
     } catch (err) {
       if (err instanceof HttpException) throw err;
@@ -131,13 +175,14 @@ export class AuthRegistrationService {
       verified: true,
     });
 
-    await this.userEventService.log({
-      userId: user.id,
-      type: EventType.APP_OPEN,
-      metadata: { via: 'verification' },
-    });
-
-    await this.redis.del(`tg:verified:${phone}`);
+    await Promise.all([
+      this.userEventService.log({
+        userId: user.id,
+        type: EventType.APP_OPEN,
+        metadata: { via: 'verification' },
+      }),
+      this.redis.del(`tg:verified:${phone}`),
+    ]);
 
     const payload = { sub: user.id, phone, temporary: true };
     const token = this.jwtService.sign(payload, { expiresIn: '30m' });
@@ -159,7 +204,6 @@ export class AuthRegistrationService {
       if (!user) throw new UnauthorizedException('کاربر یافت نشد');
 
       const changedFields: string[] = [];
-
       if (dto.nickname !== undefined) changedFields.push('nickname');
       if (dto.birthDate)
         changedFields.push('birth_year', 'birth_month', 'birth_day');
@@ -206,40 +250,44 @@ export class AuthRegistrationService {
         isCompleted: true,
       };
 
-      if (dto.password && dto.password.trim()) {
+      if (dto.password?.trim()) {
         updateData.password = await bcrypt.hash(dto.password, 10);
         changedFields.push('password');
       }
 
       const updatedUser = await this.usersService.update(userId, updateData);
-
-      if (changedFields.length > 0) {
-        await this.userEventService.log({
-          userId,
-          type: EventType.PROFILE_UPDATE,
-          metadata: { fields: changedFields, source: 'complete_profile' },
-        });
-      }
-
-      if (dto.password && dto.password.trim()) {
-        await this.userEventService.log({
-          userId,
-          type: EventType.PASSWORD_CHANGE,
-          metadata: { via: 'complete_profile' },
-        });
-      }
-
       if (!updatedUser)
         throw new InternalServerErrorException('به‌روزرسانی ناموفق');
 
-      await this.phaseService.learnFromFeedback(userId, 'profile_completed');
+      const events: Promise<any>[] = [
+        this.phaseService.learnFromFeedback(userId, 'profile_completed'),
+        this.userPhonesService.markAsActived(userId, updatedUser.phone),
+      ];
+      if (changedFields.length > 0) {
+        events.push(
+          this.userEventService.log({
+            userId,
+            type: EventType.PROFILE_UPDATE,
+            metadata: { fields: changedFields, source: 'complete_profile' },
+          }),
+        );
+      }
+      if (dto.password?.trim()) {
+        events.push(
+          this.userEventService.log({
+            userId,
+            type: EventType.PASSWORD_CHANGE,
+            metadata: { via: 'complete_profile' },
+          }),
+        );
+      }
+      await Promise.all(events);
 
       const finalPayload = { sub: updatedUser.id, phone: updatedUser.phone };
       const finalToken = this.jwtService.sign(finalPayload, {
         expiresIn: '30d',
       });
 
-      await this.userPhonesService.markAsActived(userId, updatedUser.phone);
       return { user: updatedUser, token: finalToken };
     } catch (err) {
       if (err instanceof HttpException) throw err;

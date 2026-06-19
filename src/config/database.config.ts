@@ -45,6 +45,9 @@ export default registerAs(
     username: process.env.DB_USER || 'root',
     password: process.env.DB_PASS || 'root123',
     database: process.env.DB_NAME || 'mydb',
+    extra: {
+      connectionLimit: 30,
+    },
     charset: 'utf8mb4',
     entities: [
       User,
@@ -82,8 +85,8 @@ export default registerAs(
       SEOActivity,
       ArchiveRequest,
       PartitionedEvent,
-    ], // اینجا مدل‌های دیتابیس را مشخص می‌کنیم
+    ],
     synchronize: process.env.DB_SYNC === 'true',
-    logging: true, // فعال کردن لاگ برای بررسی خطاهای SQL
+    logging: false,
   }),
 );

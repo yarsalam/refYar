@@ -3,11 +3,16 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
+@Entity('messages')
+@Index(['from_id', 'created_at'])
+@Index(['to_id', 'created_at'])
+@Index(['from_id', 'to_id'])
 @Entity('messages')
 export class Message {
   @PrimaryGeneratedColumn()

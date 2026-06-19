@@ -48,47 +48,53 @@ export class UserCrudService {
     return this.userRepo.save(user);
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto): Promise<User | null> {
+  // 🔁 نسخهٔ جدید با پارامتر existingUser
+  async update(
+    id: number,
+    updateUserDto: UpdateUserDto,
+    existingUser?: User,
+  ): Promise<User> {
     try {
-      const existingUser = await this.userRepo.findOneBy({ id });
-      if (!existingUser) {
-        throw new NotFoundException('User not found');
-      }
+      // اگر existingUser پاس داده شده باشد، از همان استفاده می‌کنیم
+      const user = existingUser ?? (await this.userRepo.findOneBy({ id }));
+      if (!user) throw new NotFoundException('User not found');
 
-      const changedFields: string[] = [];
-      for (const key in updateUserDto) {
-        if (updateUserDto[key] !== existingUser[key]) {
-          changedFields.push(key);
-        }
-      }
-
+      // حذف فیلدهای غیرمرتبط
       delete (updateUserDto as any).platform;
       delete (updateUserDto as any).recaptchaToken;
 
-      const result = await this.userRepo.update(id, {
+      // 🔹 فقط یک UPDATE واقعی به دیتابیس
+      await this.userRepo.update(id, {
         ...updateUserDto,
         updatedAt: new Date(),
       });
 
-      if (result.affected === 0) {
-        throw new NotFoundException('User not found or no changes made');
-      }
+      // 🔹 مارج محلی برای برگرداندن کاربر بروز (بدون SELECT دوباره)
+      const merged = { ...user, ...updateUserDto };
 
-      const updatedUser = await this.userRepo.findOneBy({ id });
-
-      if (changedFields.length > 0) {
-        await this.userEventService.log({
+      // رویداد به‌صورت fire‑and‑forget (منتظرش نمی‌مانیم)
+      this.userEventService
+        .log({
           userId: id,
           type: EventType.PROFILE_UPDATE,
-          metadata: { fields: changedFields, source: 'users_update' },
-        });
-      }
+          metadata: {
+            fields: Object.keys(updateUserDto),
+            source: 'users_update',
+          },
+        })
+        .catch((err) => console.error('update event log failed', err));
 
-      return updatedUser;
+      return merged as User;
     } catch (error) {
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to update user');
     }
+  }
+
+  // نسخهٔ سادهٔ updateDirect که در step1 استفاده می‌کنیم
+  async updateDirect(id: number, dto: UpdateUserDto): Promise<void> {
+    const result = await this.userRepo.update(id, dto as any);
+    if (result.affected === 0) throw new NotFoundException('User not found');
   }
 
   async findFullProfile(id: number): Promise<User> {

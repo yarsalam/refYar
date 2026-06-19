@@ -11,34 +11,28 @@ export class DevicePhoneService {
     private readonly repo: Repository<DevicePhone>,
   ) {}
 
+  // 🔁 نسخهٔ upsert اتمیک (غیرمنسوخ)
   async logEvent(dto: {
     device: UserDevice;
     phone: string;
     event: DevicePhone['event'];
     verified?: boolean;
   }) {
-    let record = await this.repo.findOne({
-      where: {
-        device: { id: dto.device.id },
+    await this.repo
+      .createQueryBuilder()
+      .insert()
+      .into(DevicePhone)
+      .values({
+        device: { id: dto.device.id } as any, // ستون FK: deviceId
         phone: dto.phone,
-      },
-      relations: ['device'],
-    });
-
-    if (record) {
-      record.event = dto.event;
-      record.verified = dto.verified ?? record.verified;
-      return this.repo.save(record);
-    }
-
-    record = this.repo.create({
-      device: dto.device,
-      phone: dto.phone,
-      event: dto.event,
-      verified: dto.verified ?? false,
-    });
-
-    return this.repo.save(record);
+        event: dto.event,
+        verified: dto.verified ?? false,
+      })
+      .orUpdate(
+        ['event', 'verified'], // ستون‌هایی که در صورت تداخل بروز شوند
+        ['deviceId', 'phone'], // ستون‌های تضاد (unique constraint)
+      )
+      .execute();
   }
 
   async countUniquePhones(deviceId: number) {

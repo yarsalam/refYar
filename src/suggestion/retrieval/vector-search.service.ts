@@ -6,6 +6,9 @@ import { BoostQueueService } from '../../redis/boost-queue.service';
 import { User } from '../../users/entities/user.entity';
 import { REDIS_CLIENT } from 'src/redis/redis.constants';
 import Redis from 'ioredis';
+import { QdrantClient } from '@qdrant/js-client-rest';
+import { FeatureStoreService } from 'src/feature-store/feature-store.service';
+import { QDRANT_CLIENT } from 'src/qdrant/qdrant.provider';
 
 @Injectable()
 export class VectorSearchService {
@@ -21,7 +24,11 @@ export class VectorSearchService {
     @Inject(REDIS_CLIENT)
     private readonly redis: Redis,
 
+    @Inject(QDRANT_CLIENT)
+    private readonly qdrant: QdrantClient,
+
     private readonly boostQueue: BoostQueueService,
+    private readonly featureStore: FeatureStoreService,
   ) {}
 
   private readonly DEFAULT_SEARCH_WEIGHTS = {
@@ -33,25 +40,31 @@ export class VectorSearchService {
   async findCandidates(userId: number, limit = 200): Promise<number[]> {
     const boostedIds = await this.boostQueue.getBoostedUsers(10);
 
-    // ۱. سعی کن snapshot کاربر فعلی را بگیری
     const userFeatures = await this.featureRepo.findOne({ where: { userId } });
 
     let searchVector: number[] | null = null;
 
     if (userFeatures) {
-      // اگر snapshot وجود دارد، بردار جستجو = ترکیب وزنی سه بردار خودش
-      const weights = await this.getSearchWeights();
-      searchVector = this.mergeVectors(
+      // 🆕 استفاده از همان متدی که در FeatureStoreService برای ذخیره استفاده می‌شود
+      searchVector = this.featureStore.buildMergedVector(
         userFeatures.profileVector || [],
         userFeatures.behaviorVector || [],
         userFeatures.personalityVector || [],
-        weights,
+        userFeatures.geoVector || [],
       );
     } else {
-      // fallback: از profileVector استاتیک
+      // fallback: ساخت بردار پروفایل از user entity و سپس ساختن mergedVector
       const user = await this.userRepo.findOne({ where: { id: userId } });
       if (user) {
-        searchVector = this.buildProfileVectorFromUser(user);
+        const profileVec = this.buildProfileVectorFromUser(user);
+        const zero5 = [0, 0, 0, 0, 0];
+        const zero2 = [0, 0];
+        searchVector = this.featureStore.buildMergedVector(
+          profileVec,
+          zero5,
+          zero5,
+          zero2,
+        );
       }
     }
 
@@ -69,112 +82,29 @@ export class VectorSearchService {
       .slice(0, limit);
   }
 
-  private mergeVectors(
-    profile: number[],
-    behavior: number[],
-    personality: number[],
-    weights: { profile: number; behavior: number; personality: number },
-  ): number[] {
-    const maxLen = Math.max(
-      profile.length,
-      behavior.length,
-      personality.length,
-      1,
-    );
-    return Array.from({ length: maxLen }, (_, i) => {
-      const p = profile[i] ?? 0;
-      const b = behavior[i] ?? 0;
-      const pr = personality[i] ?? 0;
-      return (
-        p * weights.profile + b * weights.behavior + pr * weights.personality
-      );
-    });
-  }
-
-  private async getSearchWeights(): Promise<
-    typeof this.DEFAULT_SEARCH_WEIGHTS
-  > {
-    try {
-      const stored = await this.redis.get('search:weights');
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch {}
-    // در صورت نبود Redis یا خطا، پیش‌فرض را برگردان
-    return this.DEFAULT_SEARCH_WEIGHTS;
-  }
-
   private async findSimilarUsers(
     searchVector: number[],
     limit: number,
     excludeUserId: number,
   ): Promise<number[]> {
-    // ۱. تلاش برای خواندن از کش
     const cacheKey = `similar:${excludeUserId}:${limit}`;
     const cached = await this.redis.get(cacheKey);
-    if (cached) {
-      return JSON.parse(cached);
-    }
+    if (cached) return JSON.parse(cached);
 
-    // ۲. محاسبه عادی (دقیقاً مشابه قبل)
-    const weights = await this.getSearchWeights();
+    const results = await this.qdrant.search('user_vectors', {
+      vector: searchVector,
+      limit: limit + 1,
+      filter: {
+        must_not: [{ key: 'userId', match: { value: excludeUserId } }],
+      },
+      with_payload: false,
+    });
 
-    const snapshots = await this.featureRepo
-      .createQueryBuilder('s')
-      .select([
-        's.userId',
-        's.profileVector',
-        's.behaviorVector',
-        's.personalityVector',
-      ])
-      .where('s.userId != :exclude', { exclude: excludeUserId })
-      .getMany();
-
-    const distances = snapshots
-      .filter((s) => s.userId !== excludeUserId)
-      .map((s) => {
-        const pVec = s.profileVector || [];
-        const bVec = s.behaviorVector || [];
-        const persVec = s.personalityVector || [];
-
-        const mergedLength = Math.max(
-          pVec.length,
-          bVec.length,
-          persVec.length,
-          1,
-        );
-        const mergedSelf = new Array(mergedLength)
-          .fill(0)
-          .map(
-            (_, i) =>
-              (pVec[i] ?? 0) * weights.profile +
-              (bVec[i] ?? 0) * weights.behavior +
-              (persVec[i] ?? 0) * weights.personality,
-          );
-        const searchPadded = new Array(mergedLength)
-          .fill(0)
-          .map((_, i) => searchVector[i] ?? 0);
-
-        const distance = this.euclideanDistance(searchPadded, mergedSelf);
-        return { userId: s.userId, distance };
-      })
-      .sort((a, b) => a.distance - b.distance)
-      .slice(0, limit)
-      .map((d) => d.userId);
-
-    // ۳. ذخیره در کش برای درخواست‌های بعدی (بدون افت کیفیت)
-    await this.redis.set(cacheKey, JSON.stringify(distances), 'EX', 60); // ۶۰ ثانیه
-
-    return distances;
-  }
-
-  private euclideanDistance(a: number[], b: number[]): number {
-    const len = Math.min(a.length, b.length);
-    let sum = 0;
-    for (let i = 0; i < len; i++) {
-      sum += (a[i] - b[i]) ** 2;
-    }
-    return Math.sqrt(sum);
+    const ids = results
+      .map((r) => r.id as number)
+      .filter((id) => id !== excludeUserId);
+    await this.redis.set(cacheKey, JSON.stringify(ids), 'EX', 60);
+    return ids;
   }
 
   private buildProfileVectorFromUser(user: User): number[] {

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserPhone } from './entities/user-phone.entity';
@@ -166,26 +162,19 @@ export class UserPhonesService {
   }
 
   async addFirstPhone(userId: number, phone: string) {
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      relations: ['phones'],
-    });
-    if (!user) throw new BadRequestException('کاربر یافت نشد');
-
-    const existingPhone = user.phones.find((p) => p.phone === phone);
-    if (existingPhone) {
-      throw new BadRequestException('این شماره قبلاً استفاده شده است.');
-    }
-
+    /**
+     * قبلاً: findOne(userId, { relations: ['phones'] }) ← کوئری اضافه
+     * این متد بلافاصله بعد از create user صدا زده می‌شود — user تازه ساخته
+     * شده و هیچ phone ای ندارد. نیازی به refetch نیست.
+     * اگر به خاطر race condition ای phone تکراری باشد، DB constraint خطا می‌دهد.
+     */
     const newPhone = this.userPhonesRepo.create({
-      user,
+      user: { id: userId } as User,
       phone,
       isVerified: false,
       isActive: false,
     });
-    await this.userPhonesRepo.save(newPhone);
-
-    return newPhone;
+    return this.userPhonesRepo.save(newPhone);
   }
 
   async markAsVerified(userId: number, phone: string) {

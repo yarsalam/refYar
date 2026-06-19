@@ -3,14 +3,20 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { VectorSearchService } from './vector-search.service';
 import { UserFeatureSnapshot } from '../../feature-store/entities/user-feature.entity';
 import { User } from '../../users/entities/user.entity';
-import { RedisModule } from '../../redis/redis.module'; // اگر BoostQueueService و REDIS_CLIENT از این ماژول هستند
+import { RedisModule } from '../../redis/redis.module';
+import { FeatureStoreService } from 'src/feature-store/feature-store.service';
+import { PersonalityModule } from 'src/personality/personality.module';
+import { UserEventModule } from 'src/user-event/user-event.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([UserFeatureSnapshot, User]),
-    RedisModule, // تأمین REDIS_CLIENT و BoostQueueService
+    RedisModule,
+    PersonalityModule,
+    UserEventModule,
   ],
-  providers: [VectorSearchService],
+  providers: [VectorSearchService, FeatureStoreService],
+
   exports: [VectorSearchService],
 })
 export class RetrievalModule {}
