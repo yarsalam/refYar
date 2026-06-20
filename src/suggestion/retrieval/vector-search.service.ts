@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { UserFeatureSnapshot } from '../../feature-store/entities/user-feature.entity';
 import { BoostQueueService } from '../../redis/boost-queue.service';
 import { User } from '../../users/entities/user.entity';

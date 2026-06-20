@@ -11,28 +11,41 @@ export class DevicePhoneService {
     private readonly repo: Repository<DevicePhone>,
   ) {}
 
-  // 🔁 نسخهٔ upsert اتمیک (غیرمنسوخ)
   async logEvent(dto: {
     device: UserDevice;
     phone: string;
     event: DevicePhone['event'];
     verified?: boolean;
   }) {
-    await this.repo
-      .createQueryBuilder()
-      .insert()
-      .into(DevicePhone)
-      .values({
-        device: { id: dto.device.id } as any, // ستون FK: deviceId
+    /**
+     * قبلاً: findOne با relations: ['device']
+     * این باعث می‌شد TypeORM یک JOIN به جدول user_devices اضافه کند،
+     * حتی اگر هیچ‌جا از device استفاده نمی‌کردیم.
+     *
+     * حالا: فقط where بدون relations — یک SELECT ساده بدون JOIN.
+     * device را از dto.device داریم؛ نیازی به JOIN نیست.
+     */
+    let record = await this.repo.findOne({
+      where: {
+        device: { id: dto.device.id },
         phone: dto.phone,
-        event: dto.event,
-        verified: dto.verified ?? false,
-      })
-      .orUpdate(
-        ['event', 'verified'], // ستون‌هایی که در صورت تداخل بروز شوند
-        ['deviceId', 'phone'], // ستون‌های تضاد (unique constraint)
-      )
-      .execute();
+      },
+    });
+
+    if (record) {
+      record.event = dto.event;
+      record.verified = dto.verified ?? record.verified;
+      return this.repo.save(record);
+    }
+
+    record = this.repo.create({
+      device: dto.device,
+      phone: dto.phone,
+      event: dto.event,
+      verified: dto.verified ?? false,
+    });
+
+    return this.repo.save(record);
   }
 
   async countUniquePhones(deviceId: number) {

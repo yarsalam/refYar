@@ -2,24 +2,45 @@ import { BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 
 export class RequestHelper {
-  // دریافت IP کاربر
+  /**
+   * IP واقعی کاربر را از هدرهای reverse-proxy می‌خواند.
+   * trust proxy باید در main.ts فعال باشد: app.set('trust proxy', 1)
+   */
   static getClientIp(req: Request): string {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      return (forwardedFor as string).split(',')[0].trim(); // گرفتن IP اول از لیست
-    }
-    return req.socket.remoteAddress || 'نامشخص';
+    const fwd = req.headers['x-forwarded-for'];
+    if (typeof fwd === 'string') return fwd.split(',')[0].trim();
+    return req.ip ?? req.socket?.remoteAddress ?? '0.0.0.0';
   }
 
-  // دریافت اطلاعات دستگاه کاربر
   static getUserAgent(req: Request): string {
-    return req.headers['user-agent'] || 'نامشخص';
+    return req.headers['user-agent'] ?? 'unknown';
   }
+
   static requireDeviceId(req: Request): string {
-    const deviceId = req.clientInfo.deviceId;
-    if (!deviceId) {
-      throw new BadRequestException('DEVICE_NOT_IDENTIFIED');
+    const fromMiddleware = (req as any).clientInfo?.deviceId;
+    if (typeof fromMiddleware === 'string' && fromMiddleware.length > 0) {
+      return fromMiddleware;
     }
-    return deviceId;
+
+    const fromHeader = req.headers['x-device-id'];
+    if (typeof fromHeader === 'string' && fromHeader.trim().length > 0) {
+      return fromHeader.trim();
+    }
+
+    throw new BadRequestException(
+      'هدر X-Device-Id الزامی است. هر درخواست باید یک شناسه یکتای دستگاه ارسال کند.',
+    );
+  }
+
+  /** نسخه non-throwing برای موارد اختیاری */
+  static getDeviceId(req: Request): string | undefined {
+    const fromMiddleware = (req as any).clientInfo?.deviceId;
+    if (typeof fromMiddleware === 'string' && fromMiddleware.length > 0)
+      return fromMiddleware;
+
+    const fromHeader = req.headers['x-device-id'];
+    return typeof fromHeader === 'string' && fromHeader.trim().length > 0
+      ? fromHeader.trim()
+      : undefined;
   }
 }

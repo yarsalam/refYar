@@ -33,6 +33,7 @@ lerna-debug.log*
 *~
 .DS_Store
 .vscode/*
+.gitignore
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json

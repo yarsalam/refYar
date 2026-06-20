@@ -27,20 +27,22 @@ export class UserCrudService {
     });
   }
 
+  /**
+   * قبلاً دو کوئری جداگانه بود:
+   *   1) findOne({ where: { phone } })   ← اگر پیدا نشد...
+   *   2) createQueryBuilder با JOIN phones ← کوئری دوم
+   *
+   * حالا یک کوئری با OR:
+   *   user.phone = :p   OR   phones.phone = :p
+   */
   async findByPhone(phone: string): Promise<User | null> {
-    let user = await this.userRepo.findOne({
-      where: { phone },
-      relations: ['userImages', 'phones'],
-    });
-    if (user) return user;
-
-    user = await this.userRepo
+    return this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.phones', 'phones')
       .leftJoinAndSelect('user.userImages', 'userImages')
-      .where('phones.phone = :phone', { phone })
+      .where('user.phone = :phone', { phone })
+      .orWhere('phones.phone = :phone', { phone })
       .getOne();
-    return user;
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -48,53 +50,47 @@ export class UserCrudService {
     return this.userRepo.save(user);
   }
 
-  // 🔁 نسخهٔ جدید با پارامتر existingUser
-  async update(
-    id: number,
-    updateUserDto: UpdateUserDto,
-    existingUser?: User,
-  ): Promise<User> {
+  async update(id: number, updateUserDto: UpdateUserDto): Promise<User | null> {
     try {
-      // اگر existingUser پاس داده شده باشد، از همان استفاده می‌کنیم
-      const user = existingUser ?? (await this.userRepo.findOneBy({ id }));
-      if (!user) throw new NotFoundException('User not found');
+      const existingUser = await this.userRepo.findOneBy({ id });
+      if (!existingUser) {
+        throw new NotFoundException('User not found');
+      }
 
-      // حذف فیلدهای غیرمرتبط
+      const changedFields: string[] = [];
+      for (const key in updateUserDto) {
+        if (updateUserDto[key] !== existingUser[key]) {
+          changedFields.push(key);
+        }
+      }
+
       delete (updateUserDto as any).platform;
       delete (updateUserDto as any).recaptchaToken;
 
-      // 🔹 فقط یک UPDATE واقعی به دیتابیس
-      await this.userRepo.update(id, {
+      const result = await this.userRepo.update(id, {
         ...updateUserDto,
         updatedAt: new Date(),
       });
 
-      // 🔹 مارج محلی برای برگرداندن کاربر بروز (بدون SELECT دوباره)
-      const merged = { ...user, ...updateUserDto };
+      if (result.affected === 0) {
+        throw new NotFoundException('User not found or no changes made');
+      }
 
-      // رویداد به‌صورت fire‑and‑forget (منتظرش نمی‌مانیم)
-      this.userEventService
-        .log({
+      const updatedUser = await this.userRepo.findOneBy({ id });
+
+      if (changedFields.length > 0) {
+        await this.userEventService.log({
           userId: id,
           type: EventType.PROFILE_UPDATE,
-          metadata: {
-            fields: Object.keys(updateUserDto),
-            source: 'users_update',
-          },
-        })
-        .catch((err) => console.error('update event log failed', err));
+          metadata: { fields: changedFields, source: 'users_update' },
+        });
+      }
 
-      return merged as User;
+      return updatedUser;
     } catch (error) {
       if (error instanceof HttpException) throw error;
       throw new InternalServerErrorException('Failed to update user');
     }
-  }
-
-  // نسخهٔ سادهٔ updateDirect که در step1 استفاده می‌کنیم
-  async updateDirect(id: number, dto: UpdateUserDto): Promise<void> {
-    const result = await this.userRepo.update(id, dto as any);
-    if (result.affected === 0) throw new NotFoundException('User not found');
   }
 
   async findFullProfile(id: number): Promise<User> {
@@ -116,5 +112,10 @@ export class UserCrudService {
       relations: options?.relations,
       select: options?.select as any,
     });
+  }
+
+  async updateDirect(id: number, dto: UpdateUserDto): Promise<void> {
+    const result = await this.userRepo.update(id, dto as any);
+    if (result.affected === 0) throw new NotFoundException('User not found');
   }
 }

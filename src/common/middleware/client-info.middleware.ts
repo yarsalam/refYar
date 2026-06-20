@@ -1,61 +1,49 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import axios from 'axios';
+import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
+import { NextFunction, Request, Response } from 'express';
+import * as geoip from 'geoip-lite';
 import { ClientInfo } from 'src/types/client-info.type';
+import { RequestHelper } from 'src/helpers/RequestHelper';
 
 @Injectable()
 export class ClientInfoMiddleware implements NestMiddleware {
-  async use(req: any, res: any, next: () => void) {
-    // const ip =
-    //   req.headers['x-real-ip'] ||
-    //   req.headers['x-forwarded-for']?.split(',')[0] ||
-    //   req.ip ||
-    //   req.connection?.remoteAddress;
-    // const rawDeviceId = req.headers['x-device-id'];
+  private readonly logger = new Logger(ClientInfoMiddleware.name);
 
-    // مقداردهی اولیه بدون null
-    // const clientInfo: ClientInfo = {
-    //   ip,
-    //   platform: req.headers['x-platform'] ?? undefined,
-    //   brand: req.headers['x-brand'] ?? undefined,
-    //   model: req.headers['x-model'] ?? undefined,
-    //   deviceId:
-    //     typeof rawDeviceId === 'string' && rawDeviceId.length > 5
-    //       ? rawDeviceId
-    //       : undefined,
-    //   appVersion: req.headers['x-app-version'] ?? undefined,
-    //   osVersion: req.headers['x-os-version'] ?? undefined,
-    //   isVpn: false,
-    // };
+  use(req: Request, _res: Response, next: NextFunction): void {
+    const ip = RequestHelper.getClientIp(req);
+    const rawDeviceId = req.headers['x-device-id'];
 
-    // try {
-    //   // --- GeoIP ---
-    //   const geo = await axios.get(`https://ipapi.co/${ip}/json/`);
+    const clientInfo: ClientInfo = {
+      ip,
+      platform: this.header(req, 'x-platform'),
+      brand: this.header(req, 'x-brand'),
+      model: this.header(req, 'x-model'),
+      deviceId:
+        typeof rawDeviceId === 'string' && rawDeviceId.trim().length > 0
+          ? rawDeviceId.trim()
+          : undefined,
+      appVersion: this.header(req, 'x-app-version'),
+      osVersion: this.header(req, 'x-os-version'),
+      isVpn: false,
+    };
 
-    //   clientInfo.country = geo.data.country_name ?? undefined;
-    //   clientInfo.city = geo.data.city ?? undefined;
+    try {
+      const geo = geoip.lookup(ip);
+      if (geo) {
+        clientInfo.country = geo.country || undefined;
+        clientInfo.city = geo.city || undefined;
+      }
+    } catch (err) {
+      this.logger.debug(
+        `GeoIP lookup failed for ${ip}: ${(err as Error).message}`,
+      );
+    }
 
-    //   // VPN detection
-    //   const asn = geo.data.org?.toLowerCase();
-    //   if (
-    //     asn?.includes('vpn') ||
-    //     asn?.includes('hosting') ||
-    //     asn?.includes('cloud')
-    //   ) {
-    //     clientInfo.isVpn = true;
-    //   }
-
-    //   // --- Second dataset ---
-    //   const vpnCheck = await axios.get(`https://ipwhois.app/json/${ip}`);
-    //   if (vpnCheck.data.proxy === true || vpnCheck.data.is_proxy === 'yes') {
-    //     clientInfo.isVpn = true;
-    //   }
-    // } catch (e: unknown) {
-    //   console.log(`⚠️ [ClientInfo] GeoIP/VPN lookup failed: ${e.message}`);
-    // }
-
-    // attach
-    // req.clientInfo = clientInfo;
-
+    req.clientInfo = clientInfo;
     next();
+  }
+
+  private header(req: Request, name: string): string | undefined {
+    const v = req.headers[name];
+    return typeof v === 'string' && v.length > 0 ? v : undefined;
   }
 }

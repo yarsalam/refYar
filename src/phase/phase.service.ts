@@ -337,7 +337,9 @@ export class PhaseService {
   private async calculatePercentile(score: number): Promise<number> {
     const total = await this.repo.count();
     if (total === 0) return 0;
-    const less = await this.repo.count({ where: { score: LessThan(score) } });
+    const less = await this.repo.count({
+      where: { score: LessThan(Math.max(score, 0)) },
+    });
     return Math.round((less / total) * 100);
   }
 

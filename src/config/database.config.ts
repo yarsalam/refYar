@@ -1,4 +1,5 @@
 import { registerAs } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity'; // مسیر فایل مدل یوزر
 import { ProfileVisitor } from 'src/profile-visitors/entities/profile-visitor.entity';
@@ -36,18 +37,52 @@ import { Payment } from 'src/payments/entities/payment.entity';
 import { ArchiveRequest } from 'src/user-event/entities/archive-request.entity';
 import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
+const logger = new Logger('DatabaseConfig');
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${name}. Copy .env.example to .env and set it.`,
+    );
+  }
+  return value;
+}
+
+function resolveLogging(): TypeOrmModuleOptions['logging'] {
+  if (process.env.DB_LOGGING === 'true') return true;
+  if (process.env.DB_LOGGING === 'false') return false;
+  return process.env.NODE_ENV === 'production' ? ['error', 'warn'] : true;
+}
+
+function resolveSynchronize(): boolean {
+  const sync = process.env.DB_SYNC === 'true';
+  if (sync && process.env.NODE_ENV === 'production') {
+    logger.warn(
+      '⚠️  DB_SYNC=true while NODE_ENV=production. TypeORM will attempt to ' +
+        'auto-alter the database schema on every restart. Disable this and ' +
+        'use migrations once the schema is stable.',
+    );
+  }
+  return sync;
+}
+
+// function resolveSsl(): TypeOrmModuleOptions['ssl'] {
+//   if (process.env.DB_SSL !== 'true') return undefined;
+//   return {
+//     rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+//   };
+// }
+
 export default registerAs(
   'database',
   (): TypeOrmModuleOptions => ({
     type: 'mysql',
-    host: process.env.DB_HOST || 'db',
+    host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT ?? '3306', 10),
-    username: process.env.DB_USER || 'root',
-    password: process.env.DB_PASS || 'root123',
-    database: process.env.DB_NAME || 'mydb',
-    extra: {
-      connectionLimit: 30,
-    },
+    username: requireEnv('DB_USER'),
+    password: requireEnv('DB_PASS'),
+    database: requireEnv('DB_NAME'),
     charset: 'utf8mb4',
     entities: [
       User,
@@ -86,7 +121,14 @@ export default registerAs(
       ArchiveRequest,
       PartitionedEvent,
     ],
-    synchronize: process.env.DB_SYNC === 'true',
+    synchronize: resolveSynchronize(),
+    // logging: resolveLogging(),
     logging: false,
+    // ssl: resolveSsl(),
+    extra: {
+      connectionLimit: parseInt(process.env.DB_POOL_SIZE ?? '10', 10),
+    },
+    retryAttempts: 10,
+    retryDelay: 3000,
   }),
 );

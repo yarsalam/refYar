@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { performance } from 'perf_hooks';
 import { Request } from 'express';
 import { UsersService } from '../../users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -25,15 +26,7 @@ import { CompleteProfileDto } from '../dto/complete-profile.dto';
 import { UpdateUserDto } from '../../users/dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { User } from 'src/users/entities/user.entity';
-
-// 🕒 helper امن برای اندازه‌گیری زمان (بدون state سراسری)
-function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  const start = performance.now();
-  return fn().finally(() =>
-    console.log(`${label}: ${(performance.now() - start).toFixed(1)}ms`),
-  );
-}
+import { RequestHelper } from 'src/helpers/RequestHelper';
 
 @Injectable()
 export class AuthRegistrationService {
@@ -53,13 +46,29 @@ export class AuthRegistrationService {
   ) {}
 
   async step1(createAuthDto: CreateAuthDto, req: Request) {
-    const totalStart = Date.now();
+    /**
+     * Profiling با متغیرهای local (نه console.time global):
+     * console.time در Node.js از label های global استفاده می‌کند.
+     * تحت concurrent requests، همه request ها از یک namespace مشترک
+     * استفاده می‌کنند → "Label already exists" + نتایج نادرست.
+     *
+     * راه‌حل: performance.now() به‌عنوان متغیر local در هر call stack جداست.
+     */
+    const t0 = performance.now();
+    const mark = (label: string, from: number): number => {
+      this.logger.debug(
+        `[step1] ${label}: ${Math.round(performance.now() - from)}ms`,
+      );
+      return performance.now();
+    };
 
     try {
-      // ۱. پیدا کردن کاربر
-      const existingUser = await timed('findByPhone', () =>
-        this.usersService.findByPhone(createAuthDto.phone),
+      // ── ۱) findByPhone: یک کوئری OR به‌جای دو کوئری ──────────────────
+      let t = t0;
+      const existingUser = await this.usersService.findByPhone(
+        createAuthDto.phone,
       );
+      t = mark('findByPhone', t);
 
       if (existingUser?.isCompleted) {
         throw new HttpException(
@@ -68,49 +77,30 @@ export class AuthRegistrationService {
         );
       }
 
+      // ── ۲) create یا update user ─────────────────────────────────────
       const { recaptchaToken, platform, ...userData } = createAuthDto;
-
-      let user: User;
+      let user;
       if (existingUser) {
-        // فقط یک UPDATE ساده (updateDirect) + merge محلی
-        await timed('updateUser', () =>
-          this.usersService.updateDirect(existingUser.id, userData),
-        );
-        Object.assign(existingUser, userData);
-        user = existingUser;
+        user = await this.usersService.update(existingUser.id, userData);
       } else {
-        user = await timed('createUser', () =>
-          this.usersService.create({
-            ...userData,
-            metadata: { acquisitionSource: req.headers['referer'] || 'direct' },
-          }),
-        );
+        user = await this.usersService.create({
+          ...userData,
+          metadata: { acquisitionSource: req.headers['referer'] || 'direct' },
+        });
       }
+      t = mark(existingUser ? 'updateUser' : 'createUser', t);
 
-      // ۲. عملیات مستقل
       const ci = (req as any).clientInfo || {};
+      // deviceId از middleware یا مستقیم از header — RequestHelper تضمین می‌کند
       const deviceId =
-        ci.deviceId ||
+        RequestHelper.getDeviceId(req) ||
         `srv_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 
-      // افزودن شماره تلفن (فقط کاربر جدید)
-      if (!existingUser) {
-        await timed('addFirstPhone', () =>
-          this.userPhonesService.addFirstPhone(user.id, createAuthDto.phone),
-        );
-      }
-
-      // رویداد login (fire‑and‑forget)
-      this.userEventService
-        .log({
-          userId: user.id,
-          type: EventType.LOGIN,
-          metadata: { via: 'signup', platform: createAuthDto.platform },
-        })
-        .catch((err) => console.error('Event log failed', err));
-
-      // ساخت/بروزرسانی دستگاه
-      const device = await timed('createOrUpdateDevice', () =>
+      // ── ۳) Promise.all: device + phone + event به‌صورت موازی ─────────
+      // این سه عملیات مستقل هستند و می‌توانند همزمان اجرا شوند.
+      // با pool_size=10 و 50 کاربر همزمان، این موازی‌سازی بیشترین
+      // اثر را در کاهش latency دارد.
+      const [device] = await Promise.all([
         this.userDeviceService.createOrUpdateToken({
           userId: user.id,
           userAgent: (req.headers['user-agent'] as string) || 'unknown',
@@ -118,32 +108,45 @@ export class AuthRegistrationService {
           deviceId,
           platform: ['web', 'mobile'].includes(ci.platform ?? '')
             ? (ci.platform as 'web' | 'mobile')
-            : 'web',
+            : platform === 'mobile'
+              ? 'mobile'
+              : 'web',
           brand: ci.brand,
           model: ci.model,
           osVersion: ci.osVersion,
           appVersion: ci.appVersion,
           country: ci.country,
           city: ci.city,
-          isVpn: ci.isVpn,
+          isVpn: ci.isVpn ?? false,
         }),
+        existingUser
+          ? Promise.resolve()
+          : this.userPhonesService.addFirstPhone(user.id, createAuthDto.phone),
+        this.userEventService.log({
+          userId: user.id,
+          type: EventType.LOGIN,
+          metadata: { via: 'signup', platform: createAuthDto.platform },
+        }),
+      ]);
+      t = mark('Promise.all (device, phone, event)', t);
+
+      // ── ۴) logEvent روی device (بعد از ایجاد device) ─────────────────
+      await this.devicePhoneService.logEvent({
+        device,
+        phone: createAuthDto.phone,
+        event: DevicePhoneEvent.SEEN,
+      });
+      mark('devicePhone.logEvent', t);
+
+      this.logger.debug(
+        `[step1] TOTAL: ${Math.round(performance.now() - t0)}ms`,
       );
 
-      // ۳. ثبت ارتباط دستگاه-شماره (حالا fire‑and‑forget)
-      if (device) {
-        this.devicePhoneService
-          .logEvent({
-            device,
-            phone: createAuthDto.phone,
-            event: DevicePhoneEvent.SEEN,
-          })
-          .catch((err) => console.error('devicePhone logEvent failed', err));
-      }
-
-      console.log(`[step1] TOTAL TIME: ${Date.now() - totalStart}ms`);
       return;
     } catch (err) {
       if (err instanceof HttpException) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`step1 failed for ${createAuthDto.phone}: ${msg}`);
       throw new InternalServerErrorException('خطا در پردازش درخواست');
     }
   }
@@ -154,28 +157,31 @@ export class AuthRegistrationService {
       (await this.telegramService.isVerified(phone));
 
     if (!verified) {
-      throw new UnauthorizedException('Not verified yet');
+      throw new UnauthorizedException('تأیید هنوز انجام نشده است');
     }
 
     const user = await this.usersService.findByPhone(phone);
     if (!user) {
-      throw new UnauthorizedException('User not created in step1');
+      throw new UnauthorizedException('کاربر در مرحله ۱ ثبت نشده است');
     }
 
     await this.userPhonesService.markAsVerified(user.id, phone);
 
     const device =
       await this.userDeviceService.findByClientDeviceId(clientDeviceId);
-    if (!device) throw new BadRequestException('DEVICE_NOT_FOUND');
-
-    await this.devicePhoneService.logEvent({
-      device,
-      phone,
-      event: DevicePhoneEvent.VERIFIED,
-      verified: true,
-    });
+    if (!device) {
+      throw new BadRequestException(
+        `دستگاه با شناسه ${clientDeviceId} یافت نشد. آیا step1 با همین X-Device-Id انجام شد؟`,
+      );
+    }
 
     await Promise.all([
+      this.devicePhoneService.logEvent({
+        device,
+        phone,
+        event: DevicePhoneEvent.VERIFIED,
+        verified: true,
+      }),
       this.userEventService.log({
         userId: user.id,
         type: EventType.APP_OPEN,
@@ -187,7 +193,7 @@ export class AuthRegistrationService {
     const payload = { sub: user.id, phone, temporary: true };
     const token = this.jwtService.sign(payload, { expiresIn: '30m' });
 
-    return { message: 'Verified successfully', token };
+    return { message: 'تأیید با موفقیت انجام شد', token };
   }
 
   async completeProfile(dto: CompleteProfileDto, userFromReq: any) {
@@ -259,6 +265,7 @@ export class AuthRegistrationService {
       if (!updatedUser)
         throw new InternalServerErrorException('به‌روزرسانی ناموفق');
 
+      // موازی: تمام عملیات پس از update
       const events: Promise<any>[] = [
         this.phaseService.learnFromFeedback(userId, 'profile_completed'),
         this.userPhonesService.markAsActived(userId, updatedUser.phone),
@@ -283,10 +290,10 @@ export class AuthRegistrationService {
       }
       await Promise.all(events);
 
-      const finalPayload = { sub: updatedUser.id, phone: updatedUser.phone };
-      const finalToken = this.jwtService.sign(finalPayload, {
-        expiresIn: '30d',
-      });
+      const finalToken = this.jwtService.sign(
+        { sub: updatedUser.id, phone: updatedUser.phone },
+        { expiresIn: '30d' },
+      );
 
       return { user: updatedUser, token: finalToken };
     } catch (err) {
