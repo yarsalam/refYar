@@ -182,7 +182,7 @@ export class ContentOpportunityService {
         FROM users u
         LEFT JOIN payments p ON p.user_id = u.id AND p.status = 'paid'
         WHERE u.acquisition_keyword IS NOT NULL
-          AND u.created_at > NOW() - INTERVAL '90 days'
+          AND u.created_at > DATE_SUB(NOW(), INTERVAL 90 DAY)
         GROUP BY u.acquisition_keyword
         HAVING AVG(p.amount) > 100
           AND COUNT(DISTINCT u.id) > 5

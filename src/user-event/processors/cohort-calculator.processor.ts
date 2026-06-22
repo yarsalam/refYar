@@ -27,24 +27,30 @@ export class CohortCalculatorProcessor extends WorkerHost {
 
     this.logger.log(`Starting cohort calculation for ${cohortDate}`);
 
-    // استفاده از یک کوئری بهینه برای همه روزها
+    // FIX: کوئری برای MySQL بازنویسی شد.
+    // تغییرات:
+    //   1) placeholder $1 → ?
+    //   2) EXTRACT(DAY FROM ...)::INTEGER → DATEDIFF(...)
+    //   3) DATE($1) + INTERVAL '30 days' → DATE_ADD(?, INTERVAL 30 DAY)
+    //   4) مقادیر enum اصلاح شد: 'USER_REGISTERED'/'APP_OPEN' → 'user_registered'/'app_open'
+    //      (مقدار واقعی enum با حروف کوچک است؛ مقدار اشتباه باعث می‌شد کوئری همیشه صفر برگرداند)
     const results = await this.entityManager.query(
       `
       WITH new_users AS (
         SELECT DISTINCT user_id
         FROM user_events
-        WHERE type = 'USER_REGISTERED'
-          AND DATE(created_at) = $1
+        WHERE type = 'user_registered'
+          AND DATE(created_at) = ?
       ),
       retention_data AS (
         SELECT 
           nu.user_id,
-          EXTRACT(DAY FROM (e.created_at - DATE($1)))::INTEGER AS day
+          DATEDIFF(e.created_at, ?) AS day
         FROM new_users nu
         JOIN user_events e ON e.user_id = nu.user_id
-        WHERE e.type = 'APP_OPEN'
-          AND e.created_at > DATE($1)
-          AND e.created_at <= DATE($1) + INTERVAL '30 days'
+        WHERE e.type = 'app_open'
+          AND e.created_at > ?
+          AND e.created_at <= DATE_ADD(?, INTERVAL 30 DAY)
         GROUP BY nu.user_id, day
       )
       SELECT 
@@ -55,7 +61,7 @@ export class CohortCalculatorProcessor extends WorkerHost {
       GROUP BY day
       ORDER BY day
     `,
-      [cohortDate],
+      [cohortDate, cohortDate, cohortDate, cohortDate],
     );
 
     const totalUsers = results[0]?.total_users || 0;

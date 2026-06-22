@@ -18,7 +18,7 @@ export class SEORetentionService {
     return this.analyticsConnection.query(`
       WITH cohorts AS (
         SELECT 
-          DATE_TRUNC('week', u.created_at) as cohort_week,
+          DATE_SUB(DATE(u.created_at), INTERVAL WEEKDAY(u.created_at) DAY) as cohort_week,
           u.acquisition_source,
           u.acquisition_keyword,
           COUNT(u.id) as users
@@ -29,13 +29,13 @@ export class SEORetentionService {
       retention AS (
         SELECT 
           u.acquisition_keyword,
-          COUNT(DISTINCT CASE WHEN e.created_at > u.created_at + INTERVAL '7 days' 
-                THEN u.id END)::float / COUNT(DISTINCT u.id)::float as retention_7d,
-          COUNT(DISTINCT CASE WHEN e.created_at > u.created_at + INTERVAL '30 days' 
-                THEN u.id END)::float / COUNT(DISTINCT u.id)::float as retention_30d,
+          1.0 * COUNT(DISTINCT CASE WHEN e.created_at > DATE_ADD(u.created_at, INTERVAL 7 DAY) 
+                THEN u.id END) / COUNT(DISTINCT u.id) as retention_7d,
+          1.0 * COUNT(DISTINCT CASE WHEN e.created_at > DATE_ADD(u.created_at, INTERVAL 30 DAY) 
+                THEN u.id END) / COUNT(DISTINCT u.id) as retention_30d,
           AVG(p.amount) as avg_ltv
         FROM users u
-        LEFT JOIN user_event_logs e ON e.userId = u.id
+        LEFT JOIN user_events e ON e.user_id = u.id
         LEFT JOIN payments p ON p.user_id = u.id AND p.status = 'paid'
         GROUP BY u.acquisition_keyword
       )

@@ -27,22 +27,20 @@ export class MessageController {
   // رفع باگ: اضافه کردن @Post() + امنیت from_id از JWT
   @Post()
   async send(@GetUser('id') userId: number, @Body() dto: CreateMessageDto) {
-    // از_id را از JWT می‌گیریم، نه از body
-    dto.from_id = userId;
+    console.log('JWT USER ID =', userId);
     try {
-      return await this.messageService.sendMessage(dto);
-    } catch (error: unknown) {
-      if (error instanceof PaywallException) {
-        throw new HttpException(
-          {
-            statusCode: 402,
-            message: 'اعتبار کافی ندارید',
-            paywall: error.payload,
-          },
-          HttpStatus.PAYMENT_REQUIRED,
-        );
-      }
-      throw error;
+      return await this.messageService.sendMessage(userId, dto);
+    } catch (error: any) {
+      console.error('PAYWALL CAUGHT', error);
+
+      throw new HttpException(
+        {
+          statusCode: 402,
+          message: 'اعتبار کافی ندارید',
+          paywall: error.payload,
+        },
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
   }
 

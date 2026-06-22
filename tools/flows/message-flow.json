@@ -1,0 +1,269 @@
+{
+  "_توضیح": "این فایل دستی و از روی خواندن واقعی سورس کد ساخته شده. هر ۱۵ route ماژول message را از کنترلر تا عمیق‌ترین لایه دنبال کرده و به فارسی روایت کرده.",
+  "_تاریخ_تولید": "2026-06-20",
+
+  "routes": {
+
+    "POST /messages": {
+      "خلاصه_یک_خطی": "پیام جدید می‌فرستد: اول چک بلاک، بعد ماژریشن هوش‌مصنوعی، بعد کسر اعتبار (اگر رایگان نباشد)، بعد ذخیره و اطلاع‌رسانی realtime + notification.",
+      "کنترلر": "src/message/message.controller.ts → MessageController.send()",
+      "گارد": "JwtAuthGuard (در سطح کل کنترلر با @UseGuards روی کلاس)",
+      "زنجیره_فراخوانی": "MessageController.send() → MessageService.sendMessage()",
+      "نکته_امنیتی": "from_id هرگز از body خوانده نمی‌شود؛ کنترلر صریحاً dto.from_id را با userId از JWT بازنویسی می‌کند، حتی اگر کلاینت مقدار دیگری فرستاده باشد. اما توجه: DTO (CreateMessageDto) هنوز from_id را @IsNumber() الزامی تعریف کرده، نه Optional — یعنی اگر کلاینت اصلاً فیلد from_id را در body نفرستد، ValidationPipe پیش از رسیدن به کنترلر با خطای 400 'from_id must be a number' رد می‌کند. راه‌حل درست همان چیزی است که کامنت کد می‌گوید (گرفتن از JWT) ولی DTO باید @IsOptional() هم بشود تا این تناقض رفع شود.",
+      "مراحل": [
+        {
+          "شماره": 1,
+          "عنوان": "چک رابطه مؤثر بین دو کاربر (بلاک/ریپورت)",
+          "فایل": "src/relation-status/relation-status.service.ts → getEffectiveRelation()",
+          "شرح": "اول کش Redis با کلید relation:<me>:<target> چک می‌شود (TTL=۶۰ ثانیه). اگر نبود، سه کوئری موازی نه، پشت‌سرهم اجرا می‌شود: جدول interactions (لایک/سوپرلایک/متچ/...)، جدول blocks (هرکدام از دو طرف بلاک کرده باشد)، و جدول reports (آیا گزارش تأییدشده وجود دارد). نتیجه در cache ذخیره می‌شود.",
+          "نکته": "چون نتیجه ۶۰ ثانیه کش می‌شود، اگر کاربر همین الان بلاک شده باشد، ممکن است تا ۶۰ ثانیه بعد هنوز اجازه ارسال پیام داشته باشد — این یک پنجره‌ی تأخیر در اعمال بلاک است، نه باگ، ولی باید آگاهانه باشد."
+        },
+        {
+          "شماره": 2,
+          "عنوان": "اگر بلاک بود، رد کن",
+          "شرح": "اگر relation.isBlocked (یعنی هرکدام از دو طرف دیگری را بلاک کرده) → خطای ساده 'امکان ارسال پیام به کاربر بلاک‌شده وجود ندارد' و توقف کامل. این خطا یک Error معمولی است نه HttpException، یعنی به‌صورت پیش‌فرض NestJS آن را به‌عنوان 500 می‌پوشاند نه یک کد معنادارتر مثل 403."
+        },
+        {
+          "شماره": 3,
+          "عنوان": "ماژریشن هوش‌مصنوعی پیام",
+          "فایل": "src/moderation/moderation.service.ts → moderateMessage()",
+          "شرح": "ابتدا چک می‌شود circuit breaker باز است یا نه (اگر در ۶۰ ثانیه‌ی اخیر ۵ بار پشت‌سرهم moderation fail کرده، circuit باز می‌شود و مستقیم به fallback می‌رود بدون تلاش برای صدا زدن سرویس). اگر circuit بسته بود: درخواست POST به ai_moderation:8018/moderate با timeout سه ثانیه می‌رود.",
+          "زیرمراحل": [
+            "اگر موفق: نتیجه در جدول moderation_logs ذخیره می‌شود (متن پیام هش sha256 می‌شود، نه متن خام — برای حریم خصوصی)",
+            "اگر severity غیر از low بود: handleViolation صدا زده می‌شود (پایین توضیح داده شده)",
+            "اگر خطا/timeout: شمارنده failureCount زیاد می‌شود، اگر به ۵ رسید circuit برای ۶۰ ثانیه باز می‌شود، کار به صف 'moderation' (BullMQ) برای پردازش بعدی اضافه می‌شود، و fallbackModeration صدا زده می‌شود",
+            "fallback: فقط یک regex ساده روی الگوهای کلاهبرداری فارسی می‌گردد (مثل 'شماره کارت'، 'بیا تلگرام'، 'کارت به کارت') — اگر یکی پیدا شد severity=high و action=block برمی‌گردد، وگرنه severity=low و action=allow"
+          ]
+        },
+        {
+          "شماره": 4,
+          "عنوان": "اگر severity بالا بود، عواقب اعمال می‌شود (handleViolation)",
+          "شرح": "اگر severity critical یا high یا medium بود (نه فقط در صورت block شدن پیام، حتی اگر اجازه ارسال هم داده شود): تعداد تخلفات ۲۴ ساعت اخیر کاربر شمرده می‌شود. اگر critical: محدودیت ارسال پیام اعمال می‌شود (canSendMessage=false برای ۷+۲×تعداد تخلف روز) و trustScore بیست واحد کم می‌شود. اگر high و بیش از ۲ تخلف اخیر: همان محدودیت با فرمول دیگر. اگر medium: فقط trustScore پنج واحد کم می‌شود. در همه حالت‌ها یک رویداد USER_VIOLATION هم لاگ می‌شود.",
+          "جدول": "users (فیلدهای canSendMessage، restrictedUntil، trustScore)"
+        },
+        {
+          "شماره": 5,
+          "عنوان": "اگر action=block بود، پیام اصلاً ارسال نمی‌شود",
+          "شرح": "اگر نتیجه ماژریشن action='block' بدهد (که برای severity=high یا critical همیشه اتفاق می‌افتد طبق determineAction)، خطای 'پیام شما به دلیل محتوای نامناسب ارسال نشد' برمی‌گردد و اجرا همینجا متوقف می‌شود — یعنی پیام اصلاً در جدول messages ذخیره نمی‌شود."
+        },
+        {
+          "شماره": 6,
+          "عنوان": "کسر اعتبار (در صورتی که پیام رایگان نباشد)",
+          "فایل": "src/payments/credits/credits.service.ts → consume()",
+          "شرح": "اگر dto.is_free فالس بود: یک واحد اعتبار از کاربر فرستنده کسر می‌شود. اگر اعتبار کافی نبود، PaywallException پرتاب می‌شود که کنترلر آن را به HTTP 402 PAYMENT_REQUIRED تبدیل می‌کند. این تنها جایی در کل مسیر است که خطای HTTP معنادار (402) برمی‌گردد؛ بقیه‌ی خطاهای این متد همگی Error ساده هستند که به 500 تبدیل می‌شوند."
+        },
+        {
+          "شماره": 7,
+          "عنوان": "ذخیره پیام در دیتابیس",
+          "شرح": "رکورد در جدول messages ساخته و ذخیره می‌شود (is_free پیش‌فرض true اگر مشخص نشده باشد)."
+        },
+        {
+          "شماره": 8,
+          "عنوان": "اعلان realtime از طریق WebSocket",
+          "فایل": "src/message/chat.gateway.ts → emitNewMessage()",
+          "شرح": "نام room به‌صورت نرمال‌شده ساخته می‌شود: chat_<min(from,to)>_<max(from,to)> — یعنی هر دو طرف مکالمه همیشه به یک room یکسان وصل می‌شوند صرف‌نظر از اینکه چه کسی فرستاده.",
+          "نکته": "⚠️ نکته امنیتی: متد handleConnection در ChatGateway اصلاً JWT را چک نمی‌کند (کامنت کد صراحتاً می‌گوید 'TODO: بررسی JWT'). یعنی هر کلاینتی که نام room را حدس بزند (که فرمولش با فرمول بالا قابل‌پیش‌بینی است اگر شناسه‌ی دو کاربر را بداند) می‌تواند با دستور join وارد آن room شود و پیام‌های realtime را بشنود، بدون اینکه هویتش تأیید شده باشد."
+        },
+        {
+          "شماره": 9,
+          "عنوان": "سه عملیات موازی پایانی",
+          "زیرمراحل": [
+            "لاگ رویداد MESSAGE_SENT در partitioned_events (شامل طول پیام، رایگان بودن، severity ماژریشن)",
+            "ساخت یک AppNotification برای گیرنده (NotificationService.createNotification) — این خودش notif را در جدول می‌ریزد و سپس NotificationOrchestrator.dispatch را fire-and-forget صدا می‌زند که فقط از طریق WebSocket (NotificationGateway) به کاربر گیرنده اطلاع می‌دهد. کانال‌های push/SMS/تلگرام در این فایل هنوز پیاده‌سازی نشده‌اند — کامنت کد صریحاً می‌گوید 'فعلاً فقط realtime داخل اپ' و 'TODO: فاز ۲ — push, telegram, sms'.",
+            "FeatureStoreService.learnFeatureWeights(from_id, 'message') — وزن رفتاری مربوط به ارسال پیام را در Redis کمی بالا می‌برد، سپس بردار ویژگی کاربر در Qdrant را رفرش می‌کند (upsertToQdrant)"
+          ]
+        },
+        {
+          "شماره": 10,
+          "عنوان": "PhaseService دیگر اینجا صدا زده نمی‌شود",
+          "شرح": "کامنت‌های کد صراحتاً می‌گویند فراخوانی phaseService.learnFromFeedback از اینجا حذف شده و فاز کاربر اکنون «مستقل» است و قرار است بعداً با رویکرد event-driven آپدیت شود — یعنی در حال حاضر ارسال پیام مستقیماً فاز کاربر را تغییر نمی‌دهد (برخلاف completeProfile در مسیر ثبت‌نام که هنوز مستقیم صدا می‌زند)."
+        }
+      ],
+      "خروجی_موفق": "آبجکت پیام ذخیره‌شده (شامل id، created_at و غیره)",
+      "خطاهای_ممکن": [
+        "400 — اگر from_id در body نباشد (DTO validation pipe، چون @IsNumber() الزامی است)",
+        "500 (از Error معمولی) — اگر بلاک باشد",
+        "500 (از Error معمولی) — اگر ماژریشن action=block بدهد",
+        "402 PAYMENT_REQUIRED — اگر اعتبار کافی نباشد و پیام رایگان نباشد"
+      ],
+      "میکروسرویس_پایتون_درگیر": "ai_moderation (مستقیم، با timeout سه ثانیه و circuit breaker)",
+      "جداول_و_سرویس‌های_درگیر": ["messages", "moderation_logs", "users (trustScore/canSendMessage)", "partitioned_events", "app_notifications", "Redis (relation cache + feature weights)", "Qdrant (از طریق FeatureStore)", "BullMQ queue: moderation"]
+    },
+
+    "GET /messages/inbox": {
+      "خلاصه_یک_خطی": "پیام‌های دریافتی کاربر را برمی‌گرداند (حذف‌نشده)، با امکان فیلتر رایگان/غیررایگان.",
+      "کنترلر": "MessageController.inbox()",
+      "زنجیره_فراخوانی": "MessageController.inbox() → MessageService.getInbox()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "کوئری روی جدول messages", "شرح": "where to_id=userId AND deleted_to=false، اگر query param is_free=true بود فیلتر اضافه می‌شود، مرتب‌سازی نزولی بر اساس created_at."}
+      ],
+      "خروجی_موفق": "آرایه‌ای از پیام‌ها (بدون گروه‌بندی، بدون اطلاعات کاربر مقابل)",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "GET /messages/sent": {
+      "خلاصه_یک_خطی": "پیام‌های ارسالی کاربر را برمی‌گرداند (حذف‌نشده)، با امکان فیلتر رایگان/غیررایگان.",
+      "کنترلر": "MessageController.sent()",
+      "زنجیره_فراخوانی": "MessageController.sent() → MessageService.getSent()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "کوئری روی جدول messages", "شرح": "where from_id=userId AND deleted_from=false، فیلتر اختیاری is_free، مرتب‌سازی نزولی."}
+      ],
+      "خروجی_موفق": "آرایه‌ای از پیام‌ها",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "PATCH /messages/read/:id": {
+      "خلاصه_یک_خطی": "یک پیام را به‌صورت خوانده‌شده علامت می‌زند.",
+      "کنترلر": "MessageController.markAsRead()",
+      "زنجیره_فراخوانی": "MessageController.markAsRead() → MessageService.markAsRead()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "آپدیت مستقیم read_at", "شرح": "بدون چک اینکه آیا این پیام واقعاً متعلق به این کاربر است یا نه! این متد فقط messageId می‌گیرد، userId را اصلاً پارامتر نمی‌گیرد و چک نمی‌کند.", "نکته": "⚠️ این یعنی هر کاربر لاگین‌شده‌ای با دانستن یک messageId (که عدد ترتیبی و قابل‌حدس است) می‌تواند پیام هر کاربر دیگری را، حتی پیامی که اصلاً گیرنده‌اش نیست، به‌عنوان خوانده‌شده علامت بزند. مقایسه کن با deleteFromInbox/deleteFromSent که هر دو userId را چک می‌کنند."}
+      ],
+      "خروجی_موفق": "نتیجه UpdateResult از TypeORM",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "DELETE /messages/inbox/:id": {
+      "خلاصه_یک_خطی": "یک پیام را از inbox کاربر حذف می‌کند (soft delete، فقط برای خودش).",
+      "کنترلر": "MessageController.deleteFromInbox()",
+      "زنجیره_فراخوانی": "MessageController.deleteFromInbox() → MessageService.deleteFromInbox()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "پیدا کردن پیام با چک مالکیت", "شرح": "findOneBy({id, to_id: userId}) — یعنی فقط اگر این کاربر واقعاً گیرنده باشد پیدا می‌شود. اگر نه → 404."},
+        {"شماره": 2, "عنوان": "soft delete", "شرح": "فیلد deleted_to روی true ست می‌شود — رکورد در دیتابیس می‌ماند، فقط دیگر در inbox/grouped/getInbox نمایش داده نمی‌شود."}
+      ],
+      "خروجی_موفق": "پیام آپدیت‌شده",
+      "خطاهای_ممکن": ["404 — اگر پیام پیدا نشود یا متعلق به این کاربر نباشد"],
+      "جداول_درگیر": ["messages"]
+    },
+
+    "DELETE /messages/sent/:id": {
+      "خلاصه_یک_خطی": "یک پیام را از لیست ارسالی کاربر حذف می‌کند (soft delete، فقط برای خودش).",
+      "کنترلر": "MessageController.deleteFromSent()",
+      "زنجیره_فراخوانی": "MessageController.deleteFromSent() → MessageService.deleteFromSent()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "پیدا کردن پیام با چک مالکیت", "شرح": "findOneBy({id, from_id: userId}) — مشابه deleteFromInbox ولی برای فرستنده."},
+        {"شماره": 2, "عنوان": "soft delete", "شرح": "فیلد deleted_from=true."}
+      ],
+      "خروجی_موفق": "پیام آپدیت‌شده",
+      "خطاهای_ممکن": ["404"],
+      "جداول_درگیر": ["messages"]
+    },
+
+    "GET /messages/inbox/grouped": {
+      "خلاصه_یک_خطی": "پیام‌های دریافتی را بر اساس فرستنده گروه‌بندی می‌کند و برای هر فرستنده، آخرین پیام رایگان و آخرین پیام غیررایگان را جدا نشان می‌دهد، همراه با وضعیت کاربر (بلاک/تعلیق/...) و تعداد نخوانده.",
+      "کنترلر": "MessageController.inboxGrouped()",
+      "زنجیره_فراخوانی": "MessageController.inboxGrouped() → MessageService.getInboxGroupedByUser()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "گرفتن همه پیام‌های inbox با relation به فرستنده", "شرح": "find({where: {to_id:userId, deleted_to:false}, relations:['from','from.userImages']}) — یک کوئری با JOIN."},
+        {"شماره": 2, "عنوان": "رفع N+1: گرفتن یکجای وضعیت کاربران فرستنده", "شرح": "به‌جای اینکه برای هر فرستنده جدا کوئری بزند، یکجا با IN() وضعیت (status) همه‌ی فرستنده‌های یکتا را می‌گیرد و در یک Map نگه می‌دارد."},
+        {"شماره": 3, "عنوان": "حلقه روی هر فرستنده یکتا", "شرح": "برای هر from_id: پیام‌ها را به دو گروه آزاد/غیرآزاد تقسیم می‌کند، آخرین پیام هرکدام را برمی‌دارد، پرچم‌های isSuspended/isResigned/isAdminBlocked را از status محاسبه می‌کند (getUserFlagsSync)، و تعداد نخوانده‌ی هرکدام را می‌شمارد (برخلاف getSentGroupedByUser که این تعداد را همیشه صفر می‌گذارد چون پیام ارسالی همیشه برای خود فرستنده 'خوانده‌شده' محسوب می‌شود)."},
+        {"شماره": 4, "عنوان": "خروجی نهایی", "شرح": "آرایه‌ای که می‌تواند تا دو آیتم به ازای هر فرستنده داشته باشد (یکی برای پیام‌های رایگان، یکی برای غیررایگان) — اگر فرستنده فقط یک نوع پیام فرستاده، فقط یک آیتم."}
+      ],
+      "خروجی_موفق": "GroupedMessageDto[]",
+      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام مستقیماً در این route، ولی توجه: این همان route‌ای بود که در بنچ‌مارک قبلی با خطای ۵۰۰ مواجه شد؛ منطق فعلی پایدار به‌نظر می‌رسد و علت آن خطا احتمالاً در relation 'from.userImages' یا داده‌ی ناقص بوده — نیاز به بررسی جداگانه دارد.",
+      "جداول_درگیر": ["messages", "users (status فرستنده‌ها)"]
+    },
+
+    "GET /messages/sent/grouped": {
+      "خلاصه_یک_خطی": "مشابه inbox/grouped ولی برای پیام‌های ارسالی، گروه‌بندی‌شده بر اساس گیرنده.",
+      "کنترلر": "MessageController.sentGrouped()",
+      "زنجیره_فراخوانی": "MessageController.sentGrouped() → MessageService.getSentGroupedByUser()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "همان الگوی inbox/grouped ولی معکوس", "شرح": "where from_id=userId، گروه‌بندی بر اساس to_id. تفاوت کلیدی: unread همیشه false و unreadFreeMessagesCount/unreadPaidMessagesCount همیشه 0 — چون پیام ارسالی برای فرستنده خودش همیشه 'خوانده‌شده' فرض می‌شود (read_at بی‌معنی است، چون آن فیلد برای گیرنده است نه فرستنده)."}
+      ],
+      "خروجی_موفق": "GroupedMessageDto[]",
+      "جداول_درگیر": ["messages", "users"]
+    },
+
+    "GET /messages/conversation/:targetId": {
+      "خلاصه_یک_خطی": "مکالمه کامل بین کاربر جاری و targetId را صفحه‌بندی‌شده برمی‌گرداند.",
+      "کنترلر": "MessageController.getConversation()",
+      "زنجیره_فراخوانی": "MessageController.getConversation() → MessageService.getConversation()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "کوئری OR دوطرفه", "شرح": "where: [{from:user,to:target}, {from:target,to:user}] — یعنی پیام‌های هر دو جهت با هم می‌آیند، مرتب نزولی، با صفحه‌بندی page/limit (پیش‌فرض ۰ و ۲۰)، همراه با relation به from و to."},
+        {"شماره": 2, "عنوان": "نکته", "شرح": "این متد deleted_to/deleted_from را چک نمی‌کند — یعنی پیام‌هایی که یک طرف حذف کرده، همچنان در نمای مکالمه ممکن است دیده شوند (برخلاف inbox/sent که این فیلدها را فیلتر می‌کنند)."}
+      ],
+      "خروجی_موفق": "Message[] صفحه‌بندی‌شده",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "PATCH /messages/:id": {
+      "خلاصه_یک_خطی": "محتوای یک پیام ارسالی را ویرایش می‌کند، فقط اگر هنوز خوانده نشده باشد.",
+      "کنترلر": "MessageController.editMessage()",
+      "زنجیره_فراخوانی": "MessageController.editMessage() → MessageService.editMessage()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "پیدا کردن پیام با سه شرط هم‌زمان", "شرح": "findOne({id, from_id:userId, read_at: IsNull()}) — یعنی باید (الف) پیام وجود داشته باشد، (ب) متعلق به همین کاربر به‌عنوان فرستنده باشد، و (ج) هنوز خوانده نشده باشد. اگر هرکدام برقرار نباشد → 404 با پیام 'پیام یافت نشد یا امکان ویرایش وجود ندارد' (پیام عمداً مبهم است تا مشخص نشود کدام شرط fail شده)."},
+        {"شماره": 2, "عنوان": "آپدیت محتوا", "شرح": "content جایگزین می‌شود و ذخیره می‌گردد.", "نکته": "هیچ ماژریشن مجددی روی محتوای ویرایش‌شده اجرا نمی‌شود — یعنی کاربر می‌تواند پیامی که اول safe بوده را بعداً به محتوای نامناسب ویرایش کند بدون اینکه دوباره چک شود."}
+      ],
+      "خروجی_موفق": "پیام ویرایش‌شده",
+      "خطاهای_ممکن": ["404"],
+      "جداول_درگیر": ["messages"]
+    },
+
+    "POST /messages/:id/report": {
+      "خلاصه_یک_خطی": "یک پیام را گزارش می‌کند (فقط لاگ رویداد، بدون ساخت رکورد در جدول reports).",
+      "کنترلر": "MessageController.reportMessage()",
+      "زنجیره_فراخوانی": "MessageController.reportMessage() → MessageService.reportMessage()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "پیدا کردن پیام (بدون چک مالکیت)", "شرح": "findOne({id}) — هر کاربری می‌تواند هر پیامی را با id گزارش کند، حتی اگر نه فرستنده باشد نه گیرنده."},
+        {"شماره": 2, "عنوان": "فقط لاگ رویداد", "شرح": "یک رویداد MESSAGE_REPORTED در partitioned_events ثبت می‌شود با targetUserId برابر فرستنده پیام.", "نکته": "این متد هیچ رکوردی در جدول‌های report-block (که در relation-status دیدیم) نمی‌سازد و به ModerationService هم وصل نیست. یعنی این 'گزارش پیام' کاملاً مجزا از سیستم گزارش/بلاک کاربر (report-block module) است و در getEffectiveRelation هم تأثیری ندارد."}
+      ],
+      "خروجی_موفق": "{success: true}",
+      "خطاهای_ممکن": ["404"],
+      "جداول_درگیر": ["messages (فقط خواندن)", "partitioned_events"]
+    },
+
+    "GET /messages/unread-count": {
+      "خلاصه_یک_خطی": "تعداد کل پیام‌های نخوانده‌ی inbox کاربر را برمی‌گرداند.",
+      "کنترلر": "MessageController.unreadCount()",
+      "زنجیره_فراخوانی": "MessageController.unreadCount() → MessageService.getTotalUnreadCount()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "شمارش ساده", "شرح": "count({to_id:userId, read_at: IsNull(), deleted_to:false})."}
+      ],
+      "خروجی_موفق": "عدد",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "DELETE /messages/all": {
+      "خلاصه_یک_خطی": "همه پیام‌های inbox و sent کاربر را یکجا soft-delete می‌کند.",
+      "کنترلر": "MessageController.deleteAllMessages()",
+      "زنجیره_فراخوانی": "MessageController.deleteAllMessages() → MessageService.deleteAllMessages()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "دو آپدیت موازی", "شرح": "update({to_id:userId, deleted_to:false}, {deleted_to:true}) و update({from_id:userId, deleted_from:false}, {deleted_from:true}) هم‌زمان با Promise.all."}
+      ],
+      "خروجی_موفق": "{success:true}",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "DELETE /messages/conversation/:targetUserId": {
+      "خلاصه_یک_خطی": "فقط مکالمه با یک کاربر خاص را (هر دو جهت) soft-delete می‌کند.",
+      "کنترلر": "MessageController.deleteConversation()",
+      "زنجیره_فراخوانی": "MessageController.deleteConversation() → MessageService.deleteConversation()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "دو آپدیت موازی محدود به targetUserId", "شرح": "همان الگوی deleteAllMessages ولی با شرط اضافه‌ی from_id/to_id=targetUserId."}
+      ],
+      "خروجی_موفق": "{success:true}",
+      "جداول_درگیر": ["messages"]
+    },
+
+    "PATCH /messages/read-all/:targetUserId": {
+      "خلاصه_یک_خطی": "همه پیام‌های دریافتی از یک کاربر خاص را خوانده‌شده علامت می‌زند.",
+      "کنترلر": "MessageController.markAllAsRead()",
+      "زنجیره_فراخوانی": "MessageController.markAllAsRead() → MessageService.markAllAsRead()",
+      "مراحل": [
+        {"شماره": 1, "عنوان": "آپدیت دسته‌جمعی", "شرح": "update({from_id:targetUserId, to_id:userId, read_at:IsNull()}, {read_at: new Date()}) — برخلاف markAsRead تکی، اینجا userId به‌درستی چک می‌شود چون از JWT گرفته شده و در شرط to_id قرار گرفته."}
+      ],
+      "خروجی_موفق": "{success:true}",
+      "جداول_درگیر": ["messages"]
+    }
+  },
+
+  "نکات_کلی": [
+    "ناهماهنگی امنیتی مهم بین route ها: deleteFromInbox/deleteFromSent/markAllAsRead همگی مالکیت را با userId چک می‌کنند، ولی markAsRead (تکی) و reportMessage اصلاً چک مالکیت ندارند — یعنی هر کاربر لاگین‌شده‌ای می‌تواند پیام هر کاربر دیگری را (با حدس زدن id عددی) خوانده‌شده علامت بزند یا گزارش کند.",
+    "⚠️ ChatGateway.handleConnection اصلاً JWT را اعتبارسنجی نمی‌کند (TODO باز مانده در کد) — این برخلاف NotificationGateway است که JWT را کامل چک می‌کند. نام room های چت قابل‌پیش‌بینی است (chat_<min>_<max>)، یعنی این یک حفره امنیتی واقعی برای شنود/جعل پیام‌های realtime است.",
+    "کانال‌های اعلان push/SMS/تلگرام برای پیام‌های جدید هنوز پیاده‌سازی نشده‌اند (فقط WebSocket داخل اپ کار می‌کند) — این با مستندات/خلاصه‌ی قبلی این پروژه که می‌گفت 'کانال‌های اعلان واقعی جایگزین mock شده' در تناقض است؛ یا آن تغییر جای دیگری اعمال شده (نه در NotificationOrchestrator) یا برگردانده شده.",
+    "RevenueScorerService در constructor تزریق شده ولی هیچ‌جای MessageService استفاده نمی‌شود (dead injection) — احتمالاً باقیمانده‌ی refactor قبلی است.",
+    "مسیر ارسال پیام (POST /messages) تنها route ای در این ماژول است که مستقیماً به یک میکروسرویس پایتون (ai_moderation) وصل است؛ بقیه‌ی ۱۴ route فقط با دیتابیس/Redis/WebSocket کار می‌کنند.",
+    "PhaseService دیگر از مسیر ارسال پیام صدا زده نمی‌شود (عمداً حذف شده طبق کامنت کد) — اگر انتظار داری ارسال پیام فاز کاربر را بالا ببرد، در نسخه فعلی این اتفاق نمی‌افتد."
+  ]
+}

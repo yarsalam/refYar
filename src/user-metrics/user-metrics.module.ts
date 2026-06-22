@@ -10,7 +10,6 @@ import { UserEventModule } from '../user-event/user-event.module';
 import { UserMetricsService } from './user-metrics.service';
 import { FeatureService } from './feature.service';
 import { DailyMetricsService } from './daily-metrics.service';
-import { MetricsRefreshService } from './metrics-refresh.service';
 import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 @Module({
@@ -19,12 +18,7 @@ import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.enti
     ScheduleModule.forRoot(), // برای Cron
     UserEventModule,
   ],
-  providers: [
-    UserMetricsService,
-    FeatureService,
-    DailyMetricsService,
-    MetricsRefreshService,
-  ],
+  providers: [UserMetricsService, FeatureService, DailyMetricsService],
   exports: [
     UserMetricsService,
     FeatureService, // ✅ هر دو رو export کن

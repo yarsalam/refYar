@@ -1,21 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  EntityManager,
-  Repository,
-  Between,
-  MoreThan,
-  LessThan,
-} from 'typeorm';
+import { EntityManager, Repository, Between, LessThan } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { SEOActivity } from '../seo/entities/seo-activity.entity';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import {
-  EventType,
-  UserEventLogs,
-} from 'src/user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/entities/user-event.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 @Injectable()
 export class RevenueIntelligenceService {
@@ -31,8 +23,8 @@ export class RevenueIntelligenceService {
     @InjectRepository(SEOActivity)
     private readonly seoActivityRepo: Repository<SEOActivity>,
 
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
 
     private readonly entityManager: EntityManager,
 
@@ -118,7 +110,7 @@ export class RevenueIntelligenceService {
   }
 
   private calculateAttribution(
-    events: UserEventLogs[],
+    events: PartitionedEvent[],
     seoActivities: SEOActivity[],
     totalRevenue: number,
     model: string,
@@ -169,7 +161,7 @@ export class RevenueIntelligenceService {
     }));
   }
 
-  private mapEventToChannel(event: UserEventLogs): string {
+  private mapEventToChannel(event: PartitionedEvent): string {
     switch (event.type) {
       case EventType.USER_REGISTERED:
         return event.metadata?.source || 'organic';

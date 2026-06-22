@@ -27,9 +27,11 @@ export class EventAggregatorProcessor extends WorkerHost {
 
     this.logger.log(`Aggregating events for ${date}`);
 
-    // FIX: aggregate داخل aggregate مجاز نیست در PostgreSQL.
-    // قبلاً: jsonb_object_agg(platform, COUNT(*)) → خطای "nested aggregate"
-    // حالا: با CTE اول COUNT ها محاسبه می‌شوند، سپس jsonb_object_agg روی آن اعمال می‌شود.
+    // FIX: کوئری برای MySQL بازنویسی شد (پروژه از MySQL استفاده می‌کند، نه PostgreSQL).
+    // تغییرات:
+    //   1) placeholder $1 → ?
+    //   2) jsonb_object_agg → JSON_OBJECTAGG (نام تابع معادل در MySQL)
+    //   3) WITH ... CTE همچنان پشتیبانی می‌شود (MySQL 8+)
     const results = await this.entityManager.query(
       `
       WITH base AS (
@@ -40,7 +42,7 @@ export class EventAggregatorProcessor extends WorkerHost {
           COALESCE(platform, 'unknown') AS platform,
           COALESCE(country,  'unknown') AS country
         FROM user_events
-        WHERE DATE(created_at) = $1
+        WHERE DATE(created_at) = ?
       ),
       summary AS (
         SELECT
@@ -52,7 +54,7 @@ export class EventAggregatorProcessor extends WorkerHost {
         GROUP BY type
       ),
       platform_agg AS (
-        SELECT type, jsonb_object_agg(platform, cnt) AS by_platform
+        SELECT type, JSON_OBJECTAGG(platform, cnt) AS by_platform
         FROM (
           SELECT type, platform, COUNT(*) AS cnt
           FROM base
@@ -61,7 +63,7 @@ export class EventAggregatorProcessor extends WorkerHost {
         GROUP BY type
       ),
       country_agg AS (
-        SELECT type, jsonb_object_agg(country, cnt) AS by_country
+        SELECT type, JSON_OBJECTAGG(country, cnt) AS by_country
         FROM (
           SELECT type, country, COUNT(*) AS cnt
           FROM base
@@ -74,8 +76,8 @@ export class EventAggregatorProcessor extends WorkerHost {
         s.total_count    AS count,
         s.unique_users,
         s.total_value,
-        COALESCE(pa.by_platform, '{}') AS by_platform,
-        COALESCE(ca.by_country,  '{}') AS by_country
+        COALESCE(pa.by_platform, JSON_OBJECT()) AS by_platform,
+        COALESCE(ca.by_country,  JSON_OBJECT()) AS by_country
       FROM summary s
       LEFT JOIN platform_agg pa ON pa.type = s.type
       LEFT JOIN country_agg  ca ON ca.type = s.type

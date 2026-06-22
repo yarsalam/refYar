@@ -30,26 +30,26 @@ export class DailyMetricsService {
         )
         SELECT
           user_id,
-          DATE(created_at)                                           AS metric_date,
-          COUNT(*) FILTER (WHERE type IN ('login', 'app_open'))     AS app_opens,
-          COUNT(*) FILTER (WHERE type = 'message_sent')             AS messages_sent,
-          COUNT(*) FILTER (WHERE type = 'profile_view')             AS profile_views,
-          COUNT(*) FILTER (WHERE type = 'like')                     AS likes,
-          COUNT(*) FILTER (WHERE type = 'match')                    AS matches,
-          COUNT(*) FILTER (WHERE type = 'boost_used')               AS boost_used,
-          COUNT(*) FILTER (WHERE type = 'purchase')                 AS purchases
+          DATE(created_at) AS metric_date,
+          SUM(CASE WHEN type IN ('login', 'app_open') THEN 1 ELSE 0 END) AS app_opens,
+          SUM(CASE WHEN type = 'message_sent' THEN 1 ELSE 0 END)        AS messages_sent,
+          SUM(CASE WHEN type = 'profile_view' THEN 1 ELSE 0 END)        AS profile_views,
+          SUM(CASE WHEN type = 'like' THEN 1 ELSE 0 END)                AS likes,
+          SUM(CASE WHEN type = 'match' THEN 1 ELSE 0 END)               AS matches,
+          SUM(CASE WHEN type = 'boost_used' THEN 1 ELSE 0 END)          AS boost_used,
+          SUM(CASE WHEN type = 'purchase' THEN 1 ELSE 0 END)            AS purchases
         FROM user_events
-        WHERE DATE(created_at) = $1
+        WHERE DATE(created_at) = ?
         GROUP BY user_id, DATE(created_at)
 
-        ON CONFLICT (user_id, metric_date) DO UPDATE SET
-          app_opens      = EXCLUDED.app_opens,
-          messages_sent  = EXCLUDED.messages_sent,
-          profile_views  = EXCLUDED.profile_views,
-          likes          = EXCLUDED.likes,
-          matches        = EXCLUDED.matches,
-          boost_used     = EXCLUDED.boost_used,
-          purchases      = EXCLUDED.purchases
+        ON DUPLICATE KEY UPDATE
+          app_opens      = VALUES(app_opens),
+          messages_sent  = VALUES(messages_sent),
+          profile_views  = VALUES(profile_views),
+          likes          = VALUES(likes),
+          matches        = VALUES(matches),
+          boost_used     = VALUES(boost_used),
+          purchases      = VALUES(purchases)
         `,
         [dateStr],
       );

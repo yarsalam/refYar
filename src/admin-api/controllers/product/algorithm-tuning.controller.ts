@@ -40,7 +40,6 @@ export class AlgorithmTuningController {
       'messages',
       'views',
       'retentionDays',
-      'pastPayments',
       'boostUsed',
       'cityUsers',
       'learningScore',

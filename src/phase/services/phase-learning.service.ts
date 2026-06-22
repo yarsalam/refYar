@@ -19,7 +19,6 @@ export class PhaseLearningService {
     profile_completed: 1.5,
   };
   private readonly targetWeightMap: Record<string, keyof PhaseWeights> = {
-    purchase: 'pastPayments',
     match: 'matches',
     message: 'messages',
     boost_used: 'boostUsed',

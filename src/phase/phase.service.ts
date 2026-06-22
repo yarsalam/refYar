@@ -7,7 +7,7 @@ import { Redis } from 'ioredis';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { User } from 'src/users/entities/user.entity';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 import { Interaction } from 'src/interaction/entities/interaction.entity';
 import { Message } from 'src/message/entities/message.entity';
 
@@ -18,7 +18,6 @@ export interface PhaseWeights {
   messages: number;
   views: number;
   retentionDays: number;
-  pastPayments: number;
   boostUsed: number;
   cityUsers: number;
   learningScore: number;
@@ -31,7 +30,6 @@ const DEFAULT_WEIGHTS: PhaseWeights = {
   messages: 2.0,
   views: 0.3,
   retentionDays: 1.5,
-  pastPayments: 3.0,
   boostUsed: 1.0,
   cityUsers: 5.0,
   learningScore: 4.0,
@@ -50,8 +48,12 @@ export class PhaseService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
 
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    // FIX (اولویت ۴): قبلاً از UserEventLogs (جدول منسوخ user_event_logs)
+    // خوانده می‌شد، در حالی که UserEventService رویدادها را در PartitionedEvent
+    // (جدول فعال user_events) می‌نویسد. در نتیجه فاز هیچ‌وقت روی داده‌های
+    // واقعی کاربران یاد نمی‌گرفت.
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
 
     @Inject(REDIS_CLIENT)
     private readonly redis: Redis,
@@ -168,8 +170,11 @@ export class PhaseService {
         (effectiveMessages || 0) * (weights.messages || 0) +
         (baseMetrics.views7d || 0) * (weights.views || 0) +
         (baseMetrics.retentionDays || 0) * (weights.retentionDays || 0) +
-        Math.log2((baseMetrics.pastPayments || 0) + 1) *
-          (weights.pastPayments || 0) +
+        // NOTE: pastPayments عمداً حذف شد.
+        // Phase باید engagement را اندازه بگیرد، نه درآمد.
+        // کاربری که پول داده ولی inactive است نباید فاز بالاتری داشته باشد.
+        // این سیگنال باید در RevenueService / LTV باشد و از آنجا
+        // به PaywallDecisionService برسد.
         (baseMetrics.boostUsed7d || 0) * (weights.boostUsed || 0) +
         ((baseMetrics.cityUsers || 0) > 100 ? weights.cityUsers || 0 : 0) +
         (learningScore || 0) * (weights.learningScore || 0) +
@@ -249,12 +254,12 @@ export class PhaseService {
     };
 
     const targetWeightMap: Record<string, keyof PhaseWeights> = {
-      purchase: 'pastPayments',
       match: 'matches',
       message: 'messages',
       boost_used: 'boostUsed',
       churn: 'retentionDays',
       profile_completed: 'profileCompleteness',
+      // purchase → درآمد است نه engagement؛ وزن آن دیگر در Phase نیست
     };
 
     if (event === 'churn') {

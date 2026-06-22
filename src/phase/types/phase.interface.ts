@@ -3,7 +3,6 @@ export interface PhaseWeights {
   messages: number;
   views: number;
   retentionDays: number;
-  pastPayments: number;
   boostUsed: number;
   cityUsers: number;
   learningScore: number;
@@ -16,7 +15,6 @@ export const DEFAULT_WEIGHTS: PhaseWeights = {
   messages: 2.0,
   views: 0.3,
   retentionDays: 1.5,
-  pastPayments: 3.0,
   boostUsed: 1.0,
   cityUsers: 5.0,
   learningScore: 4.0,

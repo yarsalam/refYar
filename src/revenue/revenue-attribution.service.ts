@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Payment } from 'src/payments/entities/payment.entity';
 import { User } from 'src/users/entities/user.entity';
 import { Repository, Between } from 'typeorm';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 import Redis from 'ioredis';
 import { REDIS_CLIENT } from 'src/redis/redis.constants';
 import { HttpService } from '@nestjs/axios';
@@ -56,8 +56,8 @@ export class RevenueAttributionService {
     @InjectRepository(SEOActivity)
     private readonly seoActivityRepo: Repository<SEOActivity>,
 
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
 
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
 

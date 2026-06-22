@@ -114,12 +114,15 @@ export class ConversionAnalyticsService {
   }
 
   private async calculateAvgTimeToConversion(): Promise<number> {
+    // FIX: کوئری برای MySQL بازنویسی شد.
+    //   EXTRACT(EPOCH FROM (a - b)) → TIMESTAMPDIFF(SECOND, b, a)
+    //   created_at + INTERVAL '7 days' → DATE_ADD(created_at, INTERVAL 7 DAY)
     const result = await this.feedbackRepo.query(`
-      SELECT AVG(EXTRACT(EPOCH FROM (p.created_at - f.created_at))) as avg_time
+      SELECT AVG(TIMESTAMPDIFF(SECOND, f.created_at, p.created_at)) as avg_time
       FROM ai_feedback f
       JOIN payments p ON p.user_id = f.user_id
       WHERE p.created_at > f.created_at
-        AND p.created_at < f.created_at + INTERVAL '7 days'
+        AND p.created_at < DATE_ADD(f.created_at, INTERVAL 7 DAY)
     `);
     return result[0]?.avg_time || 0;
   }

@@ -4,7 +4,7 @@ import { Connection } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
-import { UserEventLogs } from '../../../user-event/entities/user-event.entity';
+import { PartitionedEvent } from '../../../user-event/entities/partitioned-event.entity';
 import { SEOMetrics } from '../../entities/seo-metrics.entity';
 
 @Injectable()
@@ -16,8 +16,10 @@ export class SEOAnalyticsService {
     @InjectConnection()
     private readonly analyticsConnection: Connection,
 
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    // FIX: از PartitionedEvent (جدول فعال user_events) استفاده می‌شود
+    // به‌جای UserEventLogs که @deprecated است و دیگر نوشته نمی‌شود.
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
 
     @InjectRepository(SEOMetrics)
     private readonly metricsRepo: Repository<SEOMetrics>,
@@ -46,7 +48,7 @@ export class SEOAnalyticsService {
 
     for (const event of events) {
       await this.analyticsConnection.query(
-        'INSERT INTO analytics.user_events (id, user_id, type, metadata, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING',
+        'INSERT IGNORE INTO analytics.user_events (id, user_id, type, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
         [event.id, event.userId, event.type, event.metadata, event.createdAt],
       );
     }

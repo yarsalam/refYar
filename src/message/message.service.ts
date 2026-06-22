@@ -45,9 +45,9 @@ export class MessageService {
     private readonly relationStatus: RelationStatusService,
   ) {}
 
-  async sendMessage(dto: CreateMessageDto) {
+  async sendMessage(fromUserId: number, dto: CreateMessageDto) {
     const relation = await this.relationStatus.getEffectiveRelation(
-      dto.from_id,
+      fromUserId,
       dto.to_id,
     );
     if (relation.isBlocked) {
@@ -56,20 +56,20 @@ export class MessageService {
 
     const moderationResult = await this.moderationService.moderateMessage(
       dto.content,
-      dto.from_id,
+      fromUserId,
       dto.to_id,
     );
 
     if (moderationResult.action === 'block') {
       this.logger.warn(
-        `Message blocked by moderation: user ${dto.from_id} -> ${dto.to_id}, severity: ${moderationResult.severity}`,
+        `Message blocked by moderation: user ${fromUserId} -> ${dto.to_id}, severity: ${moderationResult.severity}`,
       );
       throw new Error('پیام شما به دلیل محتوای نامناسب ارسال نشد.');
     }
 
     if (!dto.is_free) {
       try {
-        await this.creditsService.consume(dto.from_id, 1, 'send_message');
+        await this.creditsService.consume(fromUserId, 1, 'send_message');
       } catch (error) {
         if (error instanceof PaywallException) throw error;
         throw new Error('خطا در بررسی اعتبار');
@@ -78,6 +78,7 @@ export class MessageService {
 
     const message = this.messageRepo.create({
       ...dto,
+      from_id: fromUserId,
       is_free: dto.is_free ?? true,
     });
 
@@ -89,7 +90,7 @@ export class MessageService {
 
     await Promise.all([
       this.userEventService.log({
-        userId: dto.from_id,
+        userId: fromUserId,
         type: EventType.MESSAGE_SENT,
         targetUserId: dto.to_id,
         metadata: {
@@ -106,7 +107,7 @@ export class MessageService {
         related_id: saved.id,
       }),
       // ✅ phaseService.learnFromFeedback حذف شد — Phase مستقل است
-      this.featureStore.learnFeatureWeights(dto.from_id, 'message'),
+      this.featureStore.learnFeatureWeights(fromUserId, 'message'),
     ]);
 
     // ✅ phaseService.learnFromFeedback حذف شد — Phase اکنون مستقل است.

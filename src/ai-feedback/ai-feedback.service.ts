@@ -96,7 +96,10 @@ export class AiFeedbackService {
     const total = await this.repo.count();
     const avgScore = await this.repo
       .createQueryBuilder('f')
-      .select("AVG((f.value->>'score')::float)", 'avg')
+      .select(
+        "AVG(CAST(JSON_UNQUOTE(JSON_EXTRACT(f.value, '$.score')) AS DECIMAL(10,4)))",
+        'avg',
+      )
       .getRawOne();
 
     return {

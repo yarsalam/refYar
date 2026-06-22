@@ -1,0 +1,186 @@
+{
+  "_توضیح": "این فایل دستی و از روی خواندن واقعی سورس کد ساخته شده (نه regex). هر route مسیر ثبت‌نام را از کنترلر تا عمیق‌ترین لایه دنبال کرده و به فارسی روایت کرده. اگر کدی بعداً عوض شد، این فایل باید دستی به‌روز شود.",
+  "_تاریخ_تولید": "2026-06-20",
+
+  "routes": {
+
+    "POST /auth/register/step1": {
+      "خلاصه_یک_خطی": "با شماره تلفن، کاربر را پیدا یا می‌سازد، دستگاه را ثبت می‌کند، و رویداد ورود را لاگ می‌زند. در این مرحله هیچ پسوردی گرفته نمی‌شود و توکنی هم برنمی‌گرداند.",
+      "کنترلر": "src/auth/auth.controller.ts → AuthController.step1()",
+      "گارد": "ندارد (عمومی است)",
+      "زنجیره_فراخوانی": "AuthController.step1() → AuthService.step1() → AuthRegistrationService.step1()",
+      "مراحل": [
+        {
+          "شماره": 1,
+          "عنوان": "پیدا کردن کاربر بر اساس شماره",
+          "فایل": "src/users/crud/user-crud.service.ts → findByPhone()",
+          "شرح": "یک کوئری با OR روی هم user.phone و هم جدول phones می‌زند (قبلاً دو کوئری جدا بوده، یکی شده). نتیجه می‌تواند کاربر موجود یا null باشد."
+        },
+        {
+          "شماره": 2,
+          "عنوان": "چک تکراری بودن ثبت‌نام",
+          "شرح": "اگر کاربر پیدا شد و isCompleted=true باشد یعنی قبلاً ثبت‌نام کامل کرده → خطای HTTP 409 CONFLICT با کد EXISTING_USER برمی‌گردد و اجرا همینجا متوقف می‌شود.",
+          "نکته": "اگر کاربر پیدا شد ولی isCompleted=false (یعنی ثبت‌نامش نصفه مانده)، رد نمی‌شود و وارد مرحله بعد می‌شود — یعنی ثبت‌نام نصفه‌کاره را می‌توان از نو ادامه داد."
+        },
+        {
+          "شماره": 3,
+          "عنوان": "⚠️ هیچ چک بلاک/مسدودیتی اینجا انجام نمی‌شود",
+          "شرح": "فیلد user.status می‌تواند 'admin_blocked' باشد (در entity تعریف شده) ولی در کل مسیر step1 → completeVerification → completeProfile، هیچ‌جا این فیلد خوانده یا چک نمی‌شود. یعنی کاربری که از پنل ادمین بلاک شده، در حال حاضر همچنان می‌تواند با همان شماره دوباره وارد جریان ثبت‌نام شود و آن را کامل کند.",
+          "نوع": "نکته/باگ احتمالی، نه مستند رفتار فعلی"
+        },
+        {
+          "شماره": 4,
+          "عنوان": "ساخت یا به‌روزرسانی کاربر",
+          "شرح": "اگر کاربر موجود نبود: رکورد جدید با metadata.acquisitionSource از هدر referer ساخته می‌شود. اگر کاربر موجود بود (و isCompleted=false): همان رکورد آپدیت می‌شود.",
+          "جدول": "users"
+        },
+        {
+          "شماره": 5,
+          "عنوان": "سه عملیات موازی (Promise.all)",
+          "شرح": "برای کاهش latency، سه کار همزمان اجرا می‌شوند:",
+          "زیرمراحل": [
+            "ثبت یا به‌روزرسانی دستگاه (UserDeviceService.createOrUpdateToken) — جدول user_devices؛ اگر همان deviceId قبلاً برای همین کاربر بود، آپدیت می‌شود وگرنه رکورد جدید",
+            "اگر کاربر تازه ساخته شده (نه آپدیت): اولین شماره تلفنش را در جدول user_phones ثبت می‌کند با isVerified=false (UserPhonesService.addFirstPhone)",
+            "لاگ رویداد LOGIN در جدول partitioned_events با متادیتای via:'signup' (UserEventService.log) — این فقط insert سریع است، صف جداگانه‌ای صدا نمی‌زند"
+          ]
+        },
+        {
+          "شماره": 6,
+          "عنوان": "ثبت رویداد device-phone",
+          "فایل": "src/auth/device-phone/device-phone.service.ts → logEvent()",
+          "شرح": "رکورد device_phone با event=SEEN ثبت یا آپدیت می‌شود — یعنی پیوند بین این device و این phone با وضعیت «دیده شده» (نه تأیید شده) ذخیره می‌شود."
+        }
+      ],
+      "خروجی_موفق": "بدون body — فقط HTTP 200/201 بدون توکن",
+      "خطاهای_ممکن": [
+        "409 CONFLICT — اگر شماره قبلاً ثبت‌نام کامل کرده (EXISTING_USER)",
+        "500 — هر خطای غیرمنتظره دیگر، به InternalServerErrorException با پیام «خطا در پردازش درخواست» تبدیل می‌شود (پیام دقیق در لاگ سرور است نه در پاسخ)"
+      ],
+      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام مستقیماً — این route فقط دیتابیس (MySQL) و چیزی شبیه ایونت‌لاگ را لمس می‌کند",
+      "جداول_دیتابیس_درگیر": ["users", "user_devices", "user_phones", "partitioned_events", "device_phones"]
+    },
+
+    "POST /auth/register/complete-verification": {
+      "خلاصه_یک_خطی": "چک می‌کند کاربر از طریق واتساپ یا تلگرام تأیید شده یا نه؛ اگر بله، شماره را verified می‌کند و یک توکن موقت (۳۰ دقیقه‌ای، temporary:true) صادر می‌کند.",
+      "کنترلر": "src/auth/auth.controller.ts → AuthController.completeVerification()",
+      "گارد": "ندارد، ولی deviceId از هدر اجباری است (RequestHelper.requireDeviceId پرتاب خطا می‌کند اگر نباشد)",
+      "زنجیره_فراخوانی": "AuthController.completeVerification() → AuthService.completeVerification() → AuthRegistrationService.completeVerification()",
+      "مراحل": [
+        {
+          "شماره": 1,
+          "عنوان": "چک وضعیت تأیید در Redis (نه دیتابیس)",
+          "شرح": "دو منبع به‌صورت OR چک می‌شوند: WhatsAppService.isVerified(phone) که کلید redis به‌نام wa:verified:<phone> را می‌خواند، و TelegramService.isVerified(phone) که کلید tg:verified:<phone> را می‌خواند. اگر هیچ‌کدام ست نشده باشند → خطای 401 'تأیید هنوز انجام نشده است' و توقف."
+        },
+        {
+          "شماره": 2,
+          "عنوان": "چگونه این کلیدهای Redis اصلاً ست می‌شوند؟",
+          "شرح": "برای واتساپ: یک listener جدا (whatsapp_listener container) پیام ورودی را در WhatsAppService.handleIncomingMessage می‌گیرد، کد ۶ رقمی را با مقدار ذخیره‌شده در wa:otp:<phone> مقایسه می‌کند و در صورت تطابق wa:verified:<phone>='1' ست می‌کند (با TTL پنج دقیقه). برای تلگرام مسیر مشابه ولی از طریق webhook است.",
+          "نکته": "این یعنی این endpoint به‌تنهایی OTP نمی‌فرستد و کدی تولید نمی‌کند — صرفاً وضعیتی که جای دیگری (واتساپ/تلگرام) ست شده را می‌خواند."
+        },
+        {
+          "شماره": 3,
+          "عنوان": "پیدا کردن کاربر",
+          "شرح": "اگر با findByPhone کاربری پیدا نشود → خطای 401 'کاربر در مرحله ۱ ثبت نشده است'. یعنی این endpoint فرض می‌کند step1 قبلاً با موفقیت اجرا شده."
+        },
+        {
+          "شماره": 4,
+          "عنوان": "علامت‌گذاری شماره به‌عنوان verified",
+          "فایل": "src/user-phones/user-phones.service.ts → markAsVerified()",
+          "شرح": "رکورد user_phones برای (userId, phone) آپدیت می‌شود: isVerified=true و verifiedAt=الان."
+        },
+        {
+          "شماره": 5,
+          "عنوان": "پیدا کردن دستگاه با clientDeviceId",
+          "شرح": "اگر دستگاهی با همین deviceId (که در step1 ساخته شده بود) پیدا نشود → خطای 400 با پیام صریح که می‌گوید شاید step1 با همین X-Device-Id انجام نشده. این یعنی device و verification باید از همان دستگاه/session باشند."
+        },
+        {
+          "شماره": 6,
+          "عنوان": "سه عملیات موازی پایانی",
+          "زیرمراحل": [
+            "ثبت رویداد device_phone با event=VERIFIED، verified=true",
+            "لاگ رویداد APP_OPEN در partitioned_events با via:'verification'",
+            "پاک کردن کلید Redis تأیید تلگرام (tg:verified:<phone>) — نکته: کلید واتساپ wa:verified:<phone> اینجا پاک نمی‌شود، فقط TTL پنج‌دقیقه‌ای خودش منقضی می‌شود"
+          ]
+        },
+        {
+          "شماره": 7,
+          "عنوان": "صدور توکن موقت",
+          "شرح": "JWT با payload {sub: userId, phone, temporary: true} و انقضای ۳۰ دقیقه ساخته می‌شود. این توکن فقط برای completeProfile معتبر است (به‌خاطر TemporaryOnlyGuard) و برای route های دیگر که JwtAuthGuard معمولی دارند کافی نیست چون آن‌ها معمولاً temporary بودن را رد نمی‌کنند ولی منطق کسب‌وکار انتظار توکن دائمی دارد."
+        }
+      ],
+      "خروجی_موفق": "{ message, token } — توکن موقت ۳۰ دقیقه‌ای",
+      "خطاهای_ممکن": [
+        "400 — اگر X-Device-Id نباشد (از RequestHelper)",
+        "401 — اگر هیچ‌کدام از واتساپ/تلگرام تأیید نکرده باشند",
+        "401 — اگر کاربر در مرحله ۱ ثبت نشده باشد",
+        "400 — اگر دستگاه با clientDeviceId پیدا نشود"
+      ],
+      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام مستقیماً",
+      "جداول_و_سرویس‌های_درگیر": ["Redis (wa:verified:*, tg:verified:*, tg:otp:*)", "user_phones", "user_devices", "device_phones", "partitioned_events"]
+    },
+
+    "POST /auth/register/completeProfile": {
+      "خلاصه_یک_خطی": "با توکن موقت، پروفایل کامل کاربر (نام، تاریخ تولد، شهر، علایق و در صورت تمایل پسورد) را ذخیره می‌کند، isCompleted=true می‌کند، و توکن نهایی ۳۰ روزه صادر می‌کند.",
+      "کنترلر": "src/auth/auth.controller.ts → AuthController.completeProfile()",
+      "گارد": "TemporaryOnlyGuard — یک AuthGuard('jwt') است که علاوه بر اعتبار JWT، چک می‌کند payload.temporary===true باشد؛ اگر توکن دائمی (غیر موقت) بفرستی، رد می‌شود با 401 'این توکن موقت نیست'.",
+      "زنجیره_فراخوانی": "AuthController.completeProfile() → AuthService.completeProfile() → AuthRegistrationService.completeProfile()",
+      "مراحل": [
+        {
+          "شماره": 1,
+          "عنوان": "اعتبارسنجی هویت از روی توکن",
+          "شرح": "userId از req.user.sub گرفته می‌شود (که Guard قبلاً تأیید کرده). اگر sub نباشد یا temporary نباشد → 401."
+        },
+        {
+          "شماره": 2,
+          "عنوان": "پیدا کردن کاربر",
+          "شرح": "UsersService.findById(userId) — اگر کاربر پیدا نشود → 401 'کاربر یافت نشد'."
+        },
+        {
+          "شماره": 3,
+          "عنوان": "تشخیص اینکه کدام فیلدها واقعاً تغییر کرده‌اند",
+          "شرح": "برای هر فیلد قابل‌تغییر (nickname, birthDate, marital, province, city, nationality, education, employment, height, weight, health, religion, aboutme, values_self, hobbies_self, partner_about, values_partner, hobbies_partner)، اگر در DTO تعریف شده بود (undefined نبود) به لیست changedFields اضافه می‌شود. این فقط برای لاگ رویداد استفاده می‌شود، نه برای منطق شرطی دیگر."
+        },
+        {
+          "شماره": 4,
+          "عنوان": "ساخت آبجکت آپدیت و در صورت نیاز هش کردن پسورد",
+          "شرح": "تمام فیلدهای پروفایل + isCompleted:true در یک آبجکت جمع می‌شوند. اگر password ارسال شده و خالی نباشد، با bcrypt (cost 10) هش می‌شود و به changedFields هم 'password' اضافه می‌شود."
+        },
+        {
+          "شماره": 5,
+          "عنوان": "آپدیت نهایی کاربر در دیتابیس",
+          "شرح": "UsersService.update(userId, updateData) — همان UserCrudService.update که قبلاً دیدیم: یک‌یک فیلدها را با مقدار فعلی مقایسه می‌کند، رکورد را آپدیت می‌کند، و اگر فیلدی واقعاً عوض شده بود، خودش هم یک رویداد PROFILE_UPDATE جداگانه لاگ می‌زند (یعنی ممکن است PROFILE_UPDATE دوبار لاگ شود — یکبار از همینجا پایین‌تر، یکبار داخل خود update())."
+        },
+        {
+          "شماره": 6,
+          "عنوان": "عملیات موازی پس از آپدیت",
+          "زیرمراحل": [
+            "PhaseService.learnFromFeedback(userId, 'profile_completed') — این باعث می‌شود وزن profileCompleteness در فرمول فاز کاربر کمی بالا برود (یادگیری تقویتی ساده)، و در پایان calculate() کل فاز کاربر را دوباره محاسبه می‌کند. همانطور که در باگ قبلی دیدیم، این محاسبه گاهی با خطای SQL مواجه می‌شود.",
+            "UserPhonesService.markAsActived(userId, phone) — رکورد user_phones را isActive=true می‌کند",
+            "اگر changedFields غیرخالی بود: لاگ رویداد PROFILE_UPDATE با لیست فیلدهای تغییریافته",
+            "اگر پسورد ست شده بود: لاگ جداگانه‌ی رویداد PASSWORD_CHANGE"
+          ]
+        },
+        {
+          "شماره": 7,
+          "عنوان": "صدور توکن نهایی",
+          "شرح": "JWT دائمی با payload {sub, phone} (بدون temporary) و انقضای ۳۰ روز صادر می‌شود. این توکن از این به بعد برای همه route های محافظت‌شده با JwtAuthGuard معتبر است."
+        }
+      ],
+      "خروجی_موفق": "{ message: 'پروفایل با موفقیت کامل شد', token } — همچنین کوکی auth_token هم ست می‌شود",
+      "خطاهای_ممکن": [
+        "401 — اگر توکن موقت نباشد (از Guard)",
+        "401 — اگر userId در توکن نباشد یا کاربر پیدا نشود",
+        "500 — 'خطا در تکمیل پروفایل' برای هر خطای دیگر (شامل خطای احتمالی PhaseService که می‌تواند کل completeProfile را fail کند چون داخل همان Promise.all است که با await صبر می‌کنیم)"
+      ],
+      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام مستقیماً، ولی PhaseService به‌طور غیرمستقیم به چند سرویس پایتون (ml_service و غیره) از طریق ماژول phase وابسته است — هرچند در این متد خاص (learnFromFeedback → calculate) مستقیماً صدایی به پایتون زده نمی‌شود، فقط محاسبه داخلی است",
+      "جداول_و_سرویس‌های_درگیر": ["users", "user_phones", "partitioned_events", "user_phase (از طریق PhaseService)", "Redis (از طریق PhaseService برای وزن‌ها)"]
+    }
+  },
+
+  "نکات_کلی_مسیر_ثبت‌نام": [
+    "هیچ‌جا در این سه route چک نمی‌شود که کاربر بلاک (status=admin_blocked) است یا نه — این باید جداگانه بررسی شود که آیا عمدی است یا یک gap.",
+    "OTP واقعی فقط برای کانال تلگرام داخل همین بک‌اند ساخته/مقایسه می‌شود؛ برای واتساپ، تولید/تأیید کد در سرویس‌های خارجی (whatsapp_listener) اتفاق می‌افتد و این بک‌اند فقط Redis را می‌خواند.",
+    "بین completeVerification و completeProfile دقیقاً ۳۰ دقیقه فرصت هست (انقضای توکن موقت) — اگر کاربر دیرتر بیاید، باید کل فرآیند را از step1 شروع کند چون توکن موقت دیگر معتبر نیست.",
+    "این مسیر کاملاً مستقل از هر میکروسرویس پایتون است (به‌جز وابستگی غیرمستقیم و سبک PhaseService) — یعنی اگر سرویس‌های پایتون پایین باشند، ثبت‌نام معمولاً باید کار کند مگر همان مشکل SQL در PhaseService رخ دهد."
+  ]
+}

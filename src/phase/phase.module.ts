@@ -8,11 +8,11 @@ import { User } from 'src/users/entities/user.entity';
 import { Payment } from 'src/payments/entities/payment.entity';
 import { UserMetricsModule } from '../user-metrics/user-metrics.module';
 import { RedisModule } from '../redis/redis.module';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
 import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 import { PhaseController } from './phase.controller';
 import { Interaction } from 'src/interaction/entities/interaction.entity';
 import { Message } from 'src/message/entities/message.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 @Module({
   imports: [
@@ -20,7 +20,7 @@ import { Message } from 'src/message/entities/message.entity';
       UserPhase,
       User,
       Payment,
-      UserEventLogs,
+      PartitionedEvent,
       Interaction,
       Message,
     ]),

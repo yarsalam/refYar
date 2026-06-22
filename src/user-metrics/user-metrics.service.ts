@@ -33,11 +33,11 @@ export class UserMetricsService {
         COALESCE(SUM(profile_views), 0) AS views7d,
         COALESCE(SUM(likes),         0) AS likes7d,
         COALESCE(SUM(matches),       0) AS matches7d,
-        COALESCE(SUM(boost_used),    0) AS "boostUsed7d",
-        COALESCE(SUM(purchases),     0) AS "purchases7d"
+        COALESCE(SUM(boost_used),    0) AS boostUsed7d,
+        COALESCE(SUM(purchases),     0) AS purchases7d
       FROM user_daily_metrics
-      WHERE user_id = $1
-        AND metric_date >= CURRENT_DATE - INTERVAL '7 days'
+      WHERE user_id = ?
+        AND metric_date >= CURDATE() - INTERVAL 7 DAY
       `,
       [userId],
     );
@@ -61,9 +61,9 @@ export class UserMetricsService {
       `
       SELECT COUNT(*) AS retention_count
       FROM user_daily_metrics
-      WHERE user_id = $1
+      WHERE user_id = ?
         AND app_opens > 0
-        AND metric_date >= CURRENT_DATE - INTERVAL '7 days'
+        AND metric_date >= CURDATE() - INTERVAL 7 DAY
       `,
       [userId],
     );
