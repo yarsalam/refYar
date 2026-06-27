@@ -7,19 +7,33 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { OnEvent } from '@nestjs/event-emitter';
+import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({ cors: true })
 export class ChatGateway {
   @WebSocketServer()
   server: Server;
 
-  constructor() {}
+  constructor(private readonly jwtService: JwtService) {}
 
   async handleConnection(client: Socket) {
-    const token = client.handshake.auth.token;
-    // TODO: بررسی JWT
-  }
+    const token =
+      client.handshake.auth?.token ||
+      client.handshake.headers.authorization?.replace('Bearer ', '');
 
+    if (!token) {
+      client.disconnect();
+      return;
+    }
+
+    try {
+      const payload = this.jwtService.verify(token);
+
+      client.data.userId = payload.sub;
+    } catch {
+      client.disconnect();
+    }
+  }
   @SubscribeMessage('join')
   handleJoin(
     @MessageBody() data: { room: string },

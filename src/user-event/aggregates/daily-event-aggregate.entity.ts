@@ -1,5 +1,5 @@
 import { Entity, Column, PrimaryColumn, UpdateDateColumn } from 'typeorm';
-import { EventType } from '../entities/user-event.entity';
+import { EventType } from '../type/event-type.enum';
 
 @Entity('daily_event_aggregates')
 export class DailyEventAggregate {

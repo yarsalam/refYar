@@ -1543,7 +1543,7 @@
           "entities": [
             "User",
             "Payment",
-            "UserEventLogs",
+            "PartitionedEvent",
             "SEOActivity"
           ],
           "injectsServices": [
@@ -3066,7 +3066,7 @@
           "entities": [
             "User",
             "Interaction",
-            "UserEventLogs"
+            "PartitionedEvent"
           ],
           "injectsServices": [],
           "redisUsed": false,
@@ -3112,7 +3112,7 @@
         "SEOService": {
           "file": "seo/services/seo.service.ts",
           "entities": [
-            "UserEventLogs",
+            "PartitionedEvent",
             "User"
           ],
           "injectsServices": [],

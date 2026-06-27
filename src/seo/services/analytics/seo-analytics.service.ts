@@ -17,7 +17,7 @@ export class SEOAnalyticsService {
     private readonly analyticsConnection: Connection,
 
     // FIX: از PartitionedEvent (جدول فعال user_events) استفاده می‌شود
-    // به‌جای UserEventLogs که @deprecated است و دیگر نوشته نمی‌شود.
+    // به‌جای PartitionedEvent که @deprecated است و دیگر نوشته نمی‌شود.
     @InjectRepository(PartitionedEvent)
     private readonly eventRepo: Repository<PartitionedEvent>,
 

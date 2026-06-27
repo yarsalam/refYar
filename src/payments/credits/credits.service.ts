@@ -3,9 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserCredits } from './entities/user-credits.entity';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { PaywallException } from '../paywall/paywall.exception';
 import { BoostQueueService } from 'src/redis/boost-queue.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class CreditsService {
@@ -37,7 +37,6 @@ export class CreditsService {
 
   async consume(userId: number, amount: number, reason: string) {
     await this.ensureExists(userId); // اطمینان از وجود رکورد
- console.log('CONSUME USER ID =', userId);
     const current = await this.get(userId);
     if (current.balance < amount) {
       throw new PaywallException({

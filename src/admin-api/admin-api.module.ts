@@ -55,7 +55,7 @@ import { CampaignSEOService } from 'src/seo/services/campaign-seo.service';
 import { SEOActivity } from 'src/seo/entities/seo-activity.entity';
 import { SEOMetrics } from 'src/seo/entities/seo-metrics.entity';
 import { FeatureStoreRevenueService } from 'src/feature-store-rvenue/feature-store-rvenue.service';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 import { SERPFeatureHunterService } from 'src/seo/services/serp-feature-hunter.service';
 import { CompetitorSEOService } from 'src/seo/services/competitor-seo.service';
 import { CompetitorData } from 'src/seo/entities/competitor-data.entity';
@@ -82,7 +82,7 @@ import { ProductService } from 'src/product/product.service';
       Block,
       SEOActivity,
       SEOMetrics,
-      UserEventLogs,
+      PartitionedEvent,
       CompetitorData,
       AiFeedback,
     ]),

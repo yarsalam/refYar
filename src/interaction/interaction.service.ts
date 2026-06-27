@@ -1,17 +1,17 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Interaction, InteractionType } from './entities/interaction.entity';
 import { User } from 'src/users/entities/user.entity';
 import { ReportBlockService } from 'src/report-block/report-block.service';
 import { Message } from 'src/message/entities/message.entity';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { UserEventService } from 'src/user-event/user-event.service';
 import { PhaseService } from 'src/phase/phase.service';
 import { RevenueScorerService } from 'src/suggestion/scoring/revenue-scorer.service';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { PersonalityService } from 'src/personality/personality.service';
 import { RedisService } from 'src/redis/redis.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class InteractionsService {

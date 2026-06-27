@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { User } from '../../../users/entities/user.entity';
 import { Interaction } from '../../../interaction/entities/interaction.entity';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 interface ContentIdea {
   title: string;
@@ -27,8 +27,8 @@ export class ContentOpportunityService {
     private readonly interactionRepo: Repository<Interaction>,
     private readonly analyticsConnection: DataSource,
 
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
   ) {}
 
   async generateContentIdeas() {
@@ -175,15 +175,15 @@ export class ContentOpportunityService {
     try {
       const highIntentKeywords = await this.analyticsConnection.query(`
         SELECT
-          u.acquisition_keyword as keyword,
+          u.acquisitionKeyword as keyword,
           COUNT(DISTINCT u.id) as users,
           AVG(p.amount) as avg_ltv,
           SUM(p.amount) as total_revenue
-        FROM users u
-        LEFT JOIN payments p ON p.user_id = u.id AND p.status = 'paid'
-        WHERE u.acquisition_keyword IS NOT NULL
-          AND u.created_at > DATE_SUB(NOW(), INTERVAL 90 DAY)
-        GROUP BY u.acquisition_keyword
+        FROM user u
+        LEFT JOIN payments p ON p.userId = u.id AND p.status = 'paid'
+        WHERE u.acquisitionKeyword IS NOT NULL
+          AND u.createdAt > DATE_SUB(NOW(), INTERVAL 90 DAY)
+        GROUP BY u.acquisitionKeyword
         HAVING AVG(p.amount) > 100
           AND COUNT(DISTINCT u.id) > 5
         ORDER BY avg_ltv DESC
@@ -200,8 +200,8 @@ export class ContentOpportunityService {
       }));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Competitor analysis failed: ${message}`);
-      return this.generateHighIntentContent();
+      this.logger.error(`High intent content failed: ${message}`);
+      return [];
     }
   }
 

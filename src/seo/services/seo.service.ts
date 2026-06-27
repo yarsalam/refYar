@@ -1,16 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEventLogs } from '../../user-event/entities/user-event.entity';
 import { User } from '../../users/entities/user.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 @Injectable()
 export class SEOService {
   private readonly logger = new Logger(SEOService.name);
 
   constructor(
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
 
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
@@ -27,7 +27,7 @@ export class SEOService {
         AVG(u.ltv) as avg_ltv,
         AVG(u.retention_7d) as avg_retention
       FROM user_event_logs e
-      JOIN users u ON u.id = e.userId
+      JOIN user u ON u.id = e.userId
       LEFT JOIN payments p ON p.user_id = u.id AND p.status = 'paid'
       WHERE e.type = 'SEARCH' 
         AND e.metadata->>'searchQuery' IS NOT NULL

@@ -6,8 +6,8 @@ import { Payment } from '../payments/entities/payment.entity';
 import { SEOActivity } from '../seo/entities/seo-activity.entity';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class RevenueIntelligenceService {

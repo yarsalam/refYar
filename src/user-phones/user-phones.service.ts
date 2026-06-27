@@ -9,7 +9,7 @@ import { RedisService } from 'src/redis/redis.service';
 import { WhatsAppService } from 'src/auth/channels/whatsapp/whatsapp.service';
 import { TelegramService } from 'src/auth/channels/telegram/telegram.service';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class UserPhonesService {

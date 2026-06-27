@@ -14,6 +14,8 @@ export class AdminApiGuard implements CanActivate {
     if (apiKey === process.env.INTERNAL_API_KEY) {
       return true;
     }
+    console.log('x-api-key=', request.headers['x-api-key']);
+    console.log('expected=', process.env.INTERNAL_API_KEY);
     throw new UnauthorizedException('Invalid API key');
   }
 }

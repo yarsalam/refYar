@@ -6,8 +6,4 @@ export class CreateMessageDto {
 
   @IsString()
   content: string;
-
-  @IsOptional()
-  @IsBoolean()
-  is_free?: boolean;
 }

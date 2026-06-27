@@ -175,21 +175,18 @@ export class AdminApiSeoController {
     }
   }
 
-  @Get('competitor-changes')
-  async getCompetitorChanges() {
-    try {
-      const { data } = await this.httpService.axiosRef.get(
-        `${this.aiSeoUrl}/competitor-changes`,
-      );
-      return data;
-    } catch (error: unknown) {
-      this.logger.error('Competitor changes fetch failed', error);
-      return [
-        { name: 'رقیب ۱', change: '+12%' },
-        { name: 'رقیب ۲', change: '-5%' },
-      ];
-    }
-  }
+  // @Get('competitor-changes')
+  // async getCompetitorChanges() {
+  //   try {
+  //     const { data } = await this.httpService.axiosRef.get(
+  //       `${this.aiSeoUrl}/competitor-changes`,
+  //     );
+  //     return data;
+  //   } catch (error: unknown) {
+  //     this.logger.error('Competitor changes fetch failed');
+  //     return [];
+  //   }
+  // }
 
   @Get('serp-features')
   async getSERPFeatures(@Query('keyword') keyword: string) {

@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, MoreThan } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { PartitionedEvent } from '../entities/partitioned-event.entity';
-import { EventType } from '../entities/user-event.entity';
+import { EventType } from '../type/event-type.enum';
+
 
 @Injectable()
 export class ChurnPredictorService {

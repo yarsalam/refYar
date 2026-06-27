@@ -14,6 +14,8 @@ import { SuggestionModule } from 'src/suggestion/suggestion.module';
 import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 import { RelationStatusModule } from 'src/relation-status/relation-status.module';
 import { ChatGateway } from './chat.gateway';
+import { PaywallModule } from 'src/payments/paywall/paywall.module';
+import { JwtModule } from '@nestjs/jwt';
 
 @Module({
   controllers: [MessageController],
@@ -28,6 +30,8 @@ import { ChatGateway } from './chat.gateway';
     SuggestionModule,
     FeatureStoreModule,
     RelationStatusModule,
+    PaywallModule,
+    JwtModule,
   ],
   exports: [MessageService, TypeOrmModule],
 })

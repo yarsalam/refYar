@@ -9,8 +9,8 @@ import { JwtService } from '@nestjs/jwt';
 import { TelegramService } from '../channels/telegram/telegram.service';
 import { WhatsAppService } from '../channels/whatsapp/whatsapp.service';
 import { UserEventService } from '../../user-event/user-event.service';
-import { EventType } from '../../user-event/entities/user-event.entity';
 import * as bcrypt from 'bcrypt';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class AuthProfileService {

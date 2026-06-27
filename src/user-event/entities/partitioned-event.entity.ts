@@ -4,8 +4,11 @@ import {
   Column,
   CreateDateColumn,
   Index,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
-import { EventType } from './user-event.entity';
+import { EventType } from '../type/event-type.enum';
+import { User } from 'src/users/entities/user.entity';
 
 @Entity('user_events')
 @Index(['userId', 'createdAt'])
@@ -47,6 +50,10 @@ export class PartitionedEvent {
 
   @Column({ length: 20, nullable: true })
   country?: string;
+
+  @ManyToOne(() => User, (user) => user.userEvents)
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @CreateDateColumn()
   createdAt: Date;

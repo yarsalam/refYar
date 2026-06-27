@@ -2,12 +2,17 @@ import { Injectable, Logger } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { InteractionsService } from 'src/interaction/interaction.service';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { VectorSearchService } from './retrieval/vector-search.service';
 import { RevenueScorerService } from './scoring/revenue-scorer.service';
 import { DiversityOptimizerService } from './optimization/diversity-optimizer.service';
 import { SuggestionEntity } from './entities/suggestion.entity';
 import { RelationStatusService } from 'src/relation-status/relation-status.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
+
+interface ScoreEntry {
+  candidateId: number;
+  expectedRevenue: number;
+}
 
 @Injectable()
 export class SuggestionService {
@@ -36,8 +41,17 @@ export class SuggestionService {
       return [];
     }
 
-    // 2. امتیازدهی دسته‌ای با expected revenue
-    const scores = await this.revenueScorer.scoreBatch(userId, candidates);
+    // 2. امتیازدهی دسته‌ای با expected revenue (فقط یک بار)
+    const scores: ScoreEntry[] = await this.revenueScorer.scoreBatch(
+      userId,
+      candidates,
+    );
+
+    // ساخت Map برای استفاده‌ی مجدد در enrichResults
+    const scoreMap = new Map<number, ScoreEntry>(
+      scores.map((s) => [s.candidateId, s]),
+    );
+
     // 3. دریافت تعداد تعاملات کاربر برای epsilon
     const interactions =
       await this.interactionsService.getUserInteractions(userId);
@@ -63,10 +77,12 @@ export class SuggestionService {
       })),
       limit,
     );
-    // 6. دریافت اطلاعات کامل کاربران
+
+    // 6. دریافت اطلاعات کامل کاربران (با ارسال scoreMap)
     const result = await this.enrichResults(
       userId,
       optimized.map((o) => Number(o.id)),
+      scoreMap,
     );
 
     // 7. لاگ غیرهمزمان (بدون await)
@@ -88,6 +104,7 @@ export class SuggestionService {
   private async enrichResults(
     userId: number,
     candidateIds: number[],
+    scoreMap: Map<number, ScoreEntry>,
   ): Promise<any[]> {
     if (candidateIds.length === 0) return [];
 
@@ -107,13 +124,11 @@ export class SuggestionService {
       ],
     });
 
-    const scores = await this.revenueScorer.scoreBatch(userId, candidateIds);
-    const scoreMap = new Map(scores.map((s) => [s.candidateId, s]));
-    // 🆕 دریافت وضعیت روابط
     const relationsMap = await this.relationStatus.getEffectiveRelationsBatch(
       userId,
       candidateIds,
     );
+
     return users
       .map((user) => {
         const rel = relationsMap.get(user.id);

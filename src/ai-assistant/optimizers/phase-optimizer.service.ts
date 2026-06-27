@@ -5,7 +5,7 @@ import { PhaseService } from '../../phase/phase.service';
 import { ProblemDetectorService } from '../analyzers/problem-detector.service';
 import { GuidanceGeneratorService } from '../guidance/guidance-generator.service';
 import { UserEventService } from '../../user-event/user-event.service';
-import { EventType } from '../../user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 export interface PhaseOptimizationPlan {
   userId: number;

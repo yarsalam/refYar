@@ -1,21 +1,15 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Block } from './entities/block.entity';
 import { Report, ReportStatus } from './entities/report.entity';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UserEventService } from '../user-event/user-event.service';
-import { EventType } from '../user-event/entities/user-event.entity';
 import { RedisService } from '../redis/redis.service';
 import { TrustScoreService } from 'src/trust/trust-score.service';
 import { User } from 'src/users/entities/user.entity';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class ReportBlockService {

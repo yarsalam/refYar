@@ -4,12 +4,10 @@ import { Repository } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { Payment } from 'src/payments/entities/payment.entity';
 import { User } from 'src/users/entities/user.entity';
-import {
-  EventType,
-  UserEventLogs,
-} from 'src/user-event/entities/user-event.entity';
 import { SEOActivity } from 'src/seo/entities/seo-activity.entity';
 import { ExternalSEOToolsService } from 'src/seo/services/external-seo-tools.service';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 export interface UserRevenueFeatures {
   userId: number;
@@ -44,8 +42,8 @@ export class FeatureStoreRevenueService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
     @InjectRepository(SEOActivity)
     private readonly seoActivityRepo: Repository<SEOActivity>,
     private readonly externalSEOTools: ExternalSEOToolsService,
@@ -166,7 +164,7 @@ export class FeatureStoreRevenueService {
     return Math.min(1, userCount / (totalUsers / 10));
   }
 
-  private calculateIntentScore(events: UserEventLogs[]): number {
+  private calculateIntentScore(events: PartitionedEvent[]): number {
     if (events.length === 0) return 0.5;
 
     const weights: Partial<Record<EventType, number>> = {

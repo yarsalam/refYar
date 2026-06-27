@@ -5,8 +5,8 @@ import { UserBoost } from './entities/user-boost.entity';
 import { PaywallException } from '../paywall/paywall.exception';
 import { PhaseService } from '../../phase/phase.service';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { BoostQueueService } from 'src/redis/boost-queue.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class BoostService {

@@ -6,7 +6,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { CreateAiImageDto } from './dto/create-ai-image.dto';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
+
 
 @Injectable()
 export class AiImageService {

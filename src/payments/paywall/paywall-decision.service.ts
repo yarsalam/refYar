@@ -50,7 +50,6 @@ export class PaywallDecisionService {
     private readonly creditsService: CreditsService,
     private readonly vipService: VipService,
     private readonly trustScoreService: TrustScoreService,
-    private readonly revenueAttributionService: RevenueAttributionService,
   ) {}
 
   /**
@@ -122,13 +121,12 @@ export class PaywallDecisionService {
     userId: number,
     creditAmount: number,
   ): Promise<PaywallContext> {
-    const [phaseResult, creditsResult, vipResult, trustResult, ltvResult] =
+    const [phaseResult, creditsResult, vipResult, trustResult] =
       await Promise.allSettled([
         this.phaseService.get(userId),
         this.creditsService.get(userId),
         this.vipService.hasVip(userId),
         this.trustScoreService.getTrustContext(userId),
-        this.revenueAttributionService.predictLTV(userId),
       ]);
 
     const phase =
@@ -137,24 +135,22 @@ export class PaywallDecisionService {
     const credits =
       creditsResult.status === 'fulfilled' ? creditsResult.value.balance : 0;
 
-    const vip =
-      vipResult.status === 'fulfilled' ? vipResult.value : false;
+    const vip = vipResult.status === 'fulfilled' ? vipResult.value : false;
 
     const trust =
       trustResult.status === 'fulfilled'
         ? trustResult.value
         : { trustScore: 50, deviceRisk: 50 };
 
-    const predictedLtv =
-      ltvResult.status === 'fulfilled' ? ltvResult.value : 0;
-
     // لاگ خطاهای جزئی بدون crash کل flow
     if (phaseResult.status === 'rejected')
-      this.logger.warn(`Phase fetch failed for ${userId}: ${phaseResult.reason}`);
+      this.logger.warn(
+        `Phase fetch failed for ${userId}: ${phaseResult.reason}`,
+      );
     if (trustResult.status === 'rejected')
-      this.logger.warn(`Trust fetch failed for ${userId}: ${trustResult.reason}`);
-    if (ltvResult.status === 'rejected')
-      this.logger.warn(`LTV fetch failed for ${userId}: ${ltvResult.reason}`);
+      this.logger.warn(
+        `Trust fetch failed for ${userId}: ${trustResult.reason}`,
+      );
 
     return {
       phase,
@@ -162,8 +158,6 @@ export class PaywallDecisionService {
       vip,
       trustScore: trust.trustScore,
       deviceRisk: trust.deviceRisk,
-      predictedLtv,
     };
   }
 }
-

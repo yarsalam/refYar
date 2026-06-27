@@ -10,7 +10,7 @@ import { User } from '../entities/user.entity';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserEventService } from '../../user-event/user-event.service';
-import { EventType } from '../../user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class UserCrudService {

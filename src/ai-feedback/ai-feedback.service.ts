@@ -6,9 +6,9 @@ import { Queue } from 'bullmq';
 import { AiFeedback } from './entities/ai-feedback.entity';
 import { CreateAiFeedbackDto } from './dto/create-ai-feedback.dto';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { ConversionAnalyticsService } from './services/conversion-analytics.service';
 import { Cron } from '@nestjs/schedule';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class AiFeedbackService {
@@ -96,10 +96,7 @@ export class AiFeedbackService {
     const total = await this.repo.count();
     const avgScore = await this.repo
       .createQueryBuilder('f')
-      .select(
-        "AVG(CAST(JSON_UNQUOTE(JSON_EXTRACT(f.value, '$.score')) AS DECIMAL(10,4)))",
-        'avg',
-      )
+      .select("AVG((f.value->>'score')::float)", 'avg')
       .getRawOne();
 
     return {

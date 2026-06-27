@@ -1507,7 +1507,7 @@
           "entities": [
             "User",
             "Payment",
-            "UserEventLogs",
+            "PartitionedEvent",
             "SEOActivity"
           ],
           "injectsServices": [
@@ -2400,7 +2400,7 @@
           "entities": [
             "UserPhase",
             "User",
-            "UserEventLogs",
+            "PartitionedEvent",
             "Interaction",
             "Message"
           ],
@@ -2785,7 +2785,7 @@
             "User",
             "Payment",
             "SEOActivity",
-            "UserEventLogs"
+            "PartitionedEvent"
           ],
           "injectsServices": [
             "HttpService",
@@ -2814,7 +2814,7 @@
             "User",
             "Payment",
             "SEOActivity",
-            "UserEventLogs"
+            "PartitionedEvent"
           ],
           "injectsServices": [],
           "redisUsed": false,
@@ -2903,7 +2903,7 @@
         "SEOAnalyticsService": {
           "file": "seo/services/analytics/seo-analytics.service.ts",
           "entities": [
-            "UserEventLogs",
+            "PartitionedEvent",
             "SEOMetrics"
           ],
           "injectsServices": [],
@@ -3006,7 +3006,7 @@
           "entities": [
             "User",
             "Interaction",
-            "UserEventLogs"
+            "PartitionedEvent"
           ],
           "injectsServices": [],
           "redisUsed": false,
@@ -3052,7 +3052,7 @@
         "SEOService": {
           "file": "seo/services/seo.service.ts",
           "entities": [
-            "UserEventLogs",
+            "PartitionedEvent",
             "User"
           ],
           "injectsServices": [],

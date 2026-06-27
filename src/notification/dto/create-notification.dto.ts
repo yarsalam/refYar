@@ -1,6 +1,12 @@
 import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
 import { NotificationType } from '../entities/notification.entity';
 
+export enum NotificationSource {
+  AI = 'ai',
+  SYSTEM = 'system',
+  USER = 'user',
+}
+
 export class CreateNotificationDto {
   @IsInt()
   user_id: number;
@@ -16,6 +22,6 @@ export class CreateNotificationDto {
   related_id?: number;
 
   @IsOptional()
-  @IsEnum(['ai', 'system', 'user'])
-  source?: 'ai' | 'system' | 'user';
+  @IsEnum(NotificationSource)
+  source?: NotificationSource;
 }

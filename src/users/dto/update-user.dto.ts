@@ -16,6 +16,7 @@ export class UpdateUserDto extends PartialType(CreateUserDto) {
   weight?: string;
   religion?: string;
   health?: string;
+  acquisitionSource?: string;
 
   // Step 3
   values_partner?: string[];

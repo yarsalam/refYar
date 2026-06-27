@@ -5,12 +5,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PhaseService } from '../phase/phase.service';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { ProductBundle } from 'src/product/entities/product-bundle.entity';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { ConfigService } from '@nestjs/config';
 import { VipService } from './vip/vip.service';
 import { UserVip } from './vip/entities/vip.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class PaymentsService {

@@ -5,7 +5,6 @@ import {
   IsBoolean,
   IsIn,
   IsOptional,
-  ValidateIf,
   IsObject,
 } from 'class-validator';
 
@@ -23,6 +22,14 @@ export class CreateAuthDto {
   @IsOptional()
   @IsBoolean()
   isCompleted: boolean;
+
+  @IsOptional()
+  @IsString()
+  acquisitionSource?: string;
+
+  @IsOptional()
+  @IsString()
+  acquisitionKeyword?: string;
 
   // @ValidateIf((o: CreateAuthDto) => o.platform === 'web')
   @IsString()

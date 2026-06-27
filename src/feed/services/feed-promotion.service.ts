@@ -5,9 +5,9 @@ import { REDIS_CLIENT } from '../../redis/redis.constants';
 import { PromotionEngineService } from '../../payments/promotion-engine.service';
 import { PromotionExposureService } from '../../payments/promotion-exposure.service';
 import { UserEventService } from '../../user-event/user-event.service';
-import { EventType } from '../../user-event/entities/user-event.entity';
 import { FeedItem, PromotionConfig } from '../types/feed.types';
 import { FeedPhase } from '../types/feed-phase.interface';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class FeedPromotionService {

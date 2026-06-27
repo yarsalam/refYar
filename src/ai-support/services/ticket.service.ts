@@ -8,10 +8,10 @@ import { TicketFeedback } from '../entities/ticket-feedback.entity';
 import { CreateTicketDto } from '../dto/create-ticket.dto';
 import { User } from '../../users/entities/user.entity';
 import { UserEventService } from '../../user-event/user-event.service';
-import { EventType } from '../../user-event/entities/user-event.entity';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { SupportTicket, TicketStatus } from '../entities/ticket.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class TicketService {

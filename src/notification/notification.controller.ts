@@ -12,6 +12,7 @@ import { NotificationService } from './notification.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { GetUser } from 'src/auth/decorator/get-user/get-user.decorator';
+import { AdminApiGuard } from 'src/admin-api/guards/api-key.guard';
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -24,8 +25,11 @@ export class NotificationController {
   }
 
   @Patch('read/:id')
-  markAsRead(@Param('id', ParseIntPipe) id: number) {
-    return this.notificationService.markAsRead(id);
+  markAsRead(
+    @GetUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.notificationService.markAsRead(id, userId);
   }
 
   @Get('unread/count')
@@ -34,6 +38,7 @@ export class NotificationController {
   }
 
   @Post()
+  @UseGuards(AdminApiGuard)
   create(@Body() dto: CreateNotificationDto) {
     return this.notificationService.createNotification(dto);
   }

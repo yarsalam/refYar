@@ -1,11 +1,12 @@
 {
-  "_توضیح": "این فایل دستی و از روی خواندن واقعی سورس کد ساخته شده. ماژول Payments سه controller جدا دارد (PaymentsController، BoostController، AdminApiPaymentsController) که همگی اینجا پوشش داده شده‌اند، به‌علاوه سرویس‌های اصلی (Credits, Vip, Boost, Paywall) که از خود این route ها و از ماژول‌های دیگر (Message, Feed, Interaction, Auth) هم صدا زده می‌شوند.",
-  "_تاریخ_تولید": "2026-06-20",
+  "_توضیح": "این فایل دستی و از روی خواندن واقعی سورس کد ساخته شده. آپدیت شده پس از BREAKING CHANGES: اضافه شدن PaywallDecisionService + PaywallPolicyEngine، اضافه شدن TrustModule، اضافه شدن RevenueAttributionService.",
+  "_تاریخ_تولید": "2026-06-22",
 
   "هشدار_امنیتی_فوری": {
     "عنوان": "🔴🔴 دو endpoint حیاتی پرداخت کاملاً بدون احراز هویت هستند",
-    "شرح": "POST /payments/grant-bundle/:userId/:bundleCode و POST /boost/grant-free/:userId هیچ‌کدام @UseGuards ندارند — نه JwtAuthGuard، نه AdminApiGuard، هیچ‌چیز. هرکسی بدون هیچ توکن یا احراز هویتی، فقط با فرستادن یک userId و bundleCode معتبر، می‌تواند برای هر کاربری اعتبار/بوست/VIP رایگان فعال کند. این برخلاف AdminApiPaymentsController (که AdminApiGuard دارد) و حتی برخلاف اکثر route های دیگر این پروژه که حداقل JwtAuthGuard دارند.",
-      "تأثیر_مالی": "چون grantBundle می‌تواند آیتم‌های type='vip' را هم فعال کند (تا ۳۰ روز VIP رایگان به‌ازای هر بار صدا زدن، نامحدود)، این یک حفره با تأثیر مالی مستقیم و جدی است، نه صرفاً یک نقص دسترسی اطلاعاتی."
+    "شرح": "POST /payments/grant-bundle/:userId/:bundleCode و POST /boost/grant-free/:userId هیچ‌کدام @UseGuards ندارند — نه JwtAuthGuard، نه AdminApiGuard، هیچ‌چیز. هرکسی بدون هیچ توکن یا احراز هویتی می‌تواند برای هر کاربری اعتبار/بوست/VIP رایگان فعال کند.",
+    "وضعیت": "⚠️ در نسخه refYar اصلاح نشده — همچنان حفره امنیتی جدی است.",
+    "تأثیر_مالی": "grantBundle می‌تواند VIP ۳۰ روزه رایگان برای هر userId صادر کند، نامحدود."
   },
 
   "routes": {
@@ -13,135 +14,139 @@
     "POST /payments/grant-bundle/:userId/:bundleCode": {
       "خلاصه_یک_خطی": "یک بسته محصول (ترکیبی از اعتبار/بوست/VIP) را برای یک کاربر فعال می‌کند.",
       "کنترلر": "src/payments/payments.controller.ts → PaymentsController.grantBundle()",
-      "گارد": "⚠️ هیچ — کاملاً عمومی، بدون نیاز به لاگین",
-      "زنجیره_فراخوانی": "PaymentsController.grantBundle() → PaymentsService.grantBundle()",
+      "گارد": "⚠️ هیچ — کاملاً عمومی",
       "مراحل": [
-        {
-          "شماره": 1,
-          "عنوان": "پیدا کردن بسته فعال",
-          "شرح": "bundleRepo.findOne({code: bundleCode, active:true}) — اگر بسته پیدا نشود یا غیرفعال باشد، خطای ساده 'Bundle not found' پرتاب می‌شود."
-        },
+        {"شماره": 1, "عنوان": "پیدا کردن بسته فعال", "شرح": "bundleRepo.findOne({code: bundleCode, active:true}) — اگر نبود، Error (نه HttpException)."},
         {
           "شماره": 2,
           "عنوان": "اعمال هر آیتم بسته به‌ترتیب (نه موازی)",
-          "شرح": "حلقه روی bundle.items: برای type='credits' → CreditsService.grant، برای type='boost' → BoostService.grantInstant (فقط شمارنده instantCount را زیاد می‌کند، فعال‌سازی واقعی boost کار جدایی است که در این مسیر اتفاق نمی‌افتد)، برای type='vip' → VipService.activateVip با durationDays پیش‌فرض ۳۰ روز اگر مشخص نشده باشد.",
-          "نکته": "⚠️ هیچ چک idempotency وجود ندارد. اگر همین endpoint دوبار با همان userId/bundleCode صدا زده شود (مثلاً به‌خاطر retry شبکه از سمت کلاینت)، کاربر دقیقاً دوبرابر همان بسته را می‌گیرد — هیچ رکوردی از 'این purchase قبلاً پردازش شده' نگه‌داری نمی‌شود."
+          "شرح": "type='credits' → CreditsService.grant، type='boost' → BoostService.grantInstant (فقط شمارنده)، type='vip' → VipService.activateVip (30 روز پیش‌فرض).",
+          "نکته": "⚠️ بدون idempotency — صدا زدن دوباره = دو برابر شدن بسته. بدون DB transaction — اگر آیتم دوم fail شود، آیتم اول rollback نمی‌شود."
         },
-        {
-          "شماره": 3,
-          "عنوان": "لاگ رویداد خرید",
-          "شرح": "یک رویداد PURCHASE با متادیتای bundleCode (نه قیمت واقعی) در partitioned_events ثبت می‌شود."
-        },
+        {"شماره": 3, "عنوان": "لاگ رویداد PURCHASE در PartitionedEvent"},
         {
           "شماره": 4,
-          "عنوان": "یادگیری/فاز (در try/catch جدا، خطایش کل تراکنش را fail نمی‌کند)",
-          "شرح": "PhaseService.markEverPaid (این تنها جایی در کل سورس فعلی است که markEverPaid واقعاً صدا زده می‌شود — برخلاف یافته قبلی در بررسی ماژول Phase که این فراخوانی پیدا نشده بود؛ اصلاح: markEverPaid از همین‌جا، از مسیر Payments، فراخوانی می‌شود). سپس PhaseService.learnFromFeedback با event='purchase' و amount=bundle.price (که اگر amount>100 باشد پاداش ۱.۵ برابر می‌شود طبق فرمول learnFromFeedback که قبلاً دیدیم — یعنی calculate() دوباره صدا زده می‌شود و همان باگ SQL راه می‌افتد). در پایان FeatureStoreService.learnFeatureWeights با event='purchase' وزن رفتاری و بردار Qdrant کاربر را به‌روزرسانی می‌کند."
+          "عنوان": "یادگیری/فاز (در try/catch، خطایش کل تراکنش را fail نمی‌کند)",
+          "شرح": "PhaseService.markEverPaid(userId) — این تنها جایی در کد است که markEverPaid صدا زده می‌شود. سپس PhaseService.learnFromFeedback با event='purchase'. سپس FeatureStoreService.learnFeatureWeights با event='purchase' → بردار Qdrant کاربر رفرش می‌شود.",
+          "نکته": "✅ با رفع باگ MySQL، calculate() که از داخل learnFromFeedback صدا زده می‌شود حالا کار می‌کند."
         }
       ],
       "خروجی_موفق": "{success:true}",
-      "خطاهای_ممکن": [
-        "500 — 'Bundle not found' اگر کد بسته نامعتبر یا غیرفعال باشد (چون فقط throw new Error می‌شود، نه HttpException با کد معنادار مثل 404)",
-        "500 — هر خطای دیگر در حلقه اعمال آیتم‌ها (مثلاً اگر CreditsService.grant fail شود، کل تراکنش نیمه‌کاره می‌ماند چون هیچ‌چیز در یک دیتابیس‌ترنزکشن واحد نیست)"
-      ],
-      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام مستقیماً؛ غیرمستقیم از طریق FeatureStoreService به Qdrant وصل است",
-      "جداول_و_سرویس‌های_درگیر": ["product_bundles", "user_credits", "user_boosts", "user_vip", "user_phase", "partitioned_events", "Redis (boost queue + feature weights)"]
+      "میکروسرویس_پایتون_درگیر": "غیرمستقیم از طریق FeatureStoreService به Qdrant",
+      "جداول_و_سرویس‌های_درگیر": ["product_bundles", "user_credits", "user_boosts", "user_vip", "user_phase", "partitioned_events", "Redis (boost queue + feature weights)", "Qdrant"]
     },
 
     "POST /boost/grant-free/:userId": {
-      "خلاصه_یک_خطی": "یک بوست رایگان یک‌بارمصرف برای کاربرانی که هنوز در فاز cold هستند فعال می‌کند (مثلاً به‌عنوان مشوق onboarding).",
+      "خلاصه_یک_خطی": "یک بوست رایگان یک‌بارمصرف برای کاربران cold فعال می‌کند.",
       "کنترلر": "src/payments/boosts/boostController.ts → BoostController.grantFreeOnce()",
       "گارد": "⚠️ هیچ — کاملاً عمومی",
-      "زنجیره_فراخوانی": "BoostController.grantFreeOnce() → BoostService.grantFreeOnce()",
       "مراحل": [
-        {
-          "شماره": 1,
-          "عنوان": "چک یک‌بارمصرف بودن",
-          "شرح": "اگر boost.freeGranted از قبل true باشد، متد بی‌صدا برمی‌گردد (بدون خطا، بدون تغییر) — یعنی این endpoint idempotent است برای همین یک مورد خاص (برخلاف grant-bundle)."
-        },
-        {
-          "شماره": 2,
-          "عنوان": "چک فاز کاربر",
-          "شرح": "فقط اگر phase.phase==='cold' باشد ادامه می‌یابد؛ برای کاربران warm/hot، متد باز هم بی‌صدا برمی‌گردد بدون خطا یا پیام — کلاینت هیچ راهی برای فهمیدن «چرا بوست نگرفتم» ندارد چون پاسخ HTTP در هر دو حالت یکسان (success:true) است."
-        },
-        {
-          "شماره": 3,
-          "عنوان": "اعطای واقعی",
-          "شرح": "instantCount یک واحد افزایش می‌یابد (decrement اتمیک با repo.increment) و freeGranted=true ست می‌شود — ولی توجه: این فقط شمارنده را بالا می‌برد، فعال‌سازی واقعی boost (یعنی activateInstant که activeUntil را ست می‌کند) از این مسیر اصلاً صدا زده نمی‌شود."
-        }
+        {"شماره": 1, "عنوان": "چک freeGranted — اگر true بود بی‌صدا برمی‌گردد (idempotent)"},
+        {"شماره": 2, "عنوان": "چک phase=cold — برای warm/hot بی‌صدا برمی‌گردد (هیچ error یا پیامی به کلاینت)"},
+        {"شماره": 3, "عنوان": "instantCount++ (اتمیک) + freeGranted=true — فعال‌سازی واقعی boost اینجا نیست"}
       ],
-      "خروجی_موفق": "{success:true, userId} — حتی اگر هیچ‌کاری واقعاً انجام نشده باشد (به‌خاطر freeGranted یا فاز غیر-cold)",
-      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام",
-      "جداول_درگیر": ["user_boosts", "user_phase (فقط خواندن)"]
+      "خروجی_موفق": "{success:true, userId} — حتی اگر هیچ کاری نشده",
+      "جداول_درگیر": ["user_boosts", "user_phase (خواندن)"]
     },
 
     "GET /admin-api/payments/total-revenue": {
       "خلاصه_یک_خطی": "مجموع کل مبالغ پرداخت‌های موفق را برمی‌گرداند.",
-      "کنترلر": "src/admin-api/controllers/payments/admin-api-payments.controller.ts → AdminApiPaymentsController.totalRevenue()",
-      "گارد": "AdminApiGuard — نیاز به هدر X-Api-Key با مقدار برابر INTERNAL_API_KEY از .env (همانی که در راهنمای خطای simulator هم اشاره شده بود)",
-      "زنجیره_فراخوانی": "AdminApiPaymentsController.totalRevenue() مستقیماً Repository<Payment> را با QueryBuilder صدا می‌زند — هیچ لایه سرویس میانی ندارد",
+      "کنترلر": "src/admin-api/controllers/payments/admin-api-payments.controller.ts",
+      "گارد": "AdminApiGuard — نیاز به هدر X-Api-Key برابر INTERNAL_API_KEY از .env",
       "مراحل": [
-        {"شماره": 1, "عنوان": "SUM با فیلتر status", "شرح": "SELECT SUM(amount) FROM payments WHERE status='success' — اگر هیچ پرداختی نباشد، total به‌جای null به 0 fallback می‌شود (result?.total || 0)."}
+        {"شماره": 1, "عنوان": "SELECT SUM(amount) FROM payments WHERE status='success' — اگر نتیجه null باشد 0 برمی‌گردد"}
       ],
       "خروجی_موفق": "{total: number}",
-      "خطاهای_ممکن": ["401 — اگر هدر X-Api-Key نباشد یا غلط باشد"],
-      "میکروسرویس_پایتون_درگیر": "هیچ‌کدام",
-      "جداول_درگیر": ["payments"],
-      "نکته": "این تنها route این ماژول است که جدول payments واقعی (رکورد تراکنش پرداخت واقعی، نه credits/boost/vip) را لمس می‌کند. هیچ‌کدام از دو route دیگر (grant-bundle، grant-free) رکوردی در جدول payments نمی‌سازند — یعنی 'اعطای' محصول از 'ثبت پرداخت واقعی' کاملاً جداست؛ این endpoint مجموع پرداخت‌های واقعی را می‌شمارد، نه مجموع چیزهایی که grant شده‌اند (که می‌تواند با grant-bundle بدون پرداخت واقعی نامتوازن شود، دقیقاً به‌خاطر نبود authentication روی آن endpoint)."
+      "خطاهای_ممکن": ["401 — اگر X-Api-Key نباشد یا غلط باشد"],
+      "جداول_درگیر": ["payments"]
     }
   },
 
-  "نقاط_ورودی_غیرمستقیم_و_زیرسیستم‌ها": {
-    "_توضیح": "بخش زیادی از منطق پرداخت route مستقیم HTTP ندارد ولی از ماژول‌های دیگر صدا زده می‌شود یا کاملاً orphan (بدون هیچ caller) است.",
+  "زیرسیستم_جدید_PaywallDecision": {
+    "_توضیح": "PaywallDecisionService و PaywallPolicyEngine در این نسخه اضافه شدند. این زیرسیستم مرکزی تصمیم paywall است.",
 
+    "PaywallDecisionService": {
+      "فایل": "src/payments/paywall/paywall-decision.service.ts",
+      "وظیفه": "Orchestrator خالص: داده جمع می‌کند، به PaywallPolicyEngine می‌دهد، نتیجه را اجرا می‌کند.",
+      "داده‌های_ورودی": [
+        "PhaseService.get(userId) → phase (engagement)",
+        "CreditsService.get(userId) → موجودی اعتبار",
+        "VipService.hasVip(userId) → آیا VIP فعال است",
+        "TrustScoreService.getTrustContext(userId) → trustScore (0-100) + deviceRisk (0-100)",
+        "RevenueAttributionService.predictLTV(userId) → LTV پیش‌بینی‌شده"
+      ],
+      "مکانیزم_خطا": "Promise.allSettled — اگر یک سرویس fail کند، بقیه ادامه می‌دهند. مقادیر پیش‌فرض: phase='cold', credits=0, vip=false, trustScore=50, deviceRisk=50.",
+      "متدهای_عمومی": [
+        "checkAndConsume(userId, amount, action) — بررسی و مصرف اعتبار. اگر مجاز نباشد PaywallException پرتاب می‌کند.",
+        "canPerformAction(userId, amount) — فقط-خواندنی برای UI قبل از ارسال"
+      ],
+      "وضعیت_اتصال": "⚠️ هنوز به MessageService وصل نیست — MessageService مستقیم از CreditsService استفاده می‌کند. اتصال این زیرسیستم به MessageService در نسخه بعد."
+    },
+
+    "PaywallPolicyEngine": {
+      "فایل": "src/payments/paywall/paywall-policy.engine.ts",
+      "وظیفه": "Pure function ارزیاب قانون — بدون dependency injection، کاملاً قابل unit-test.",
+      "قوانین_به_ترتیب_اولویت": [
+        "۱. VIP → همیشه مجاز، بدون کسر اعتبار",
+        "۲. deviceRisk > 80 → همیشه ممنوع (denyReason: 'high_device_risk') — حتی Cold هم رایگان نیست",
+        "۳. phase='cold' AND trustScore >= 50 AND deviceRisk <= 40 → مجاز رایگان (reason: 'cold_phase_trusted')",
+        "۴. credits > 0 → مجاز با کسر اعتبار (reason: 'credits_available')",
+        "۵. در غیر این صورت → ممنوع (denyReason: 'credits_required')"
+      ]
+    },
+
+    "TrustScoreService": {
+      "فایل": "src/trust/trust-score.service.ts (ماژول جدید در این نسخه)",
+      "وظیفه": "محاسبه trustScore (0-100) و deviceRisk (0-100) بر اساس اطلاعات کاربر.",
+      "فاکتورهای_trustScore": [
+        "تأیید شماره تلفن (+10)",
+        "تعداد عکس (+/- بر اساس تعداد)",
+        "گزارش‌های تأیید‌شده از دیگران (-)",
+        "سابقه رویدادهای کاربر (از PartitionedEvent)"
+      ],
+      "فاکتورهای_deviceRisk": "از DevicePhoneService — تعداد حساب‌های مختلف روی یک دستگاه یا یک شماره"
+    }
+  },
+
+  "نقاط_ورودی_غیرمستقیم": {
     "CreditsService.consume(userId, amount, reason)": {
-      "صدا_زده_می‌شود_از": ["src/message/message.service.ts → sendMessage() (هنگام ارسال پیام غیررایگان)"],
-      "شرح": "اگر اعتبار کافی نباشد، PaywallException پرتاب می‌کند که فقط در MessageController به ۴۰۲ تبدیل می‌شود (نکته زیر را ببینید).",
-      "نکته_race_condition": "ensureExists از repo.upsert(['userId']) استفاده می‌کند که باید atomic باشد، ولی entity واقعی (UserCredits) یک @Index صریح با نام IDX_USER_CREDITS_USER_ID دارد در حالی که خطای واقعی دیده‌شده در لاگ‌های قبلی نام index متفاوتی داشت (IDX_9bea00b91b76684bcfe49a2f11، که الگوی نام‌گذاری خودکار TypeORM است) — این نشان می‌دهد دیتابیس واقعی هنوز نسخه‌ی قدیمی‌تر/خودکار این index را دارد، نه نسخه‌ای که الان در entity با نام صریح تعریف شده؛ یعنی یک schema drift بین کد فعلی و دیتابیس واقعی محتمل است، مشابه چیزی که در ماژول Phase دیدیم."
+      "صدا_زده_می‌شود_از": ["MessageService.sendMessage() (هنگام is_free=false)"],
+      "شرح": "اگر اعتبار کافی نباشد، PaywallException پرتاب می‌کند که در MessageController به HTTP 402 تبدیل می‌شود."
     },
 
     "CreditsService.grant(userId, amount)": {
       "صدا_زده_می‌شود_از": ["PaymentsService.grantBundle() (برای آیتم‌های type='credits')"],
-      "شرح": "اگر موجودی به ۱۰۰ یا بیشتر برسد، کاربر به صف 'high credit' در Redis اضافه می‌شود که بعداً در Feed (به‌عنوان creditIds کاندیدای ویژه با اولویت ۶۰) استفاده می‌شود."
+      "شرح": "اگر موجودی به ۱۰۰ یا بیشتر برسد، کاربر به صف 'high credit' در Redis اضافه می‌شود."
     },
 
     "VipService.activateVip(userId, durationDays)": {
-      "صدا_زده_می‌شود_از": ["PaymentsService.grantBundle() (برای آیتم‌های type='vip')"],
-      "شرح": "اگر کاربر VIP فعال داشته باشد، تاریخ انقضا را تمدید می‌کند؛ وگرنه رکورد جدید می‌سازد. به Redis (enqueueVip) هم اضافه می‌شود که در Feed برای اولویت‌دهی VIP استفاده می‌شود."
+      "صدا_زده_می‌شود_از": ["PaymentsService.grantBundle() (برای type='vip')"],
+      "شرح": "اگر VIP فعال باشد تمدید می‌کند، وگرنه رکورد جدید. به Redis (enqueueVip) هم اضافه می‌شود."
     },
 
     "VipService.expireVip(userId)": {
-      "صدا_زده_می‌شود_از": "⚠️ هیچ‌جا در کل سورس فعلی پیدا نشد.",
-      "نکته": "این متد منطق کامل و درستی دارد (active=false می‌کند و رویداد VIP_EXPIRED لاگ می‌زند) ولی هیچ cron job، scheduler، یا event listener آن را صدا نمی‌زند. در نتیجه، رکورد VIP یک کاربر حتی بعد از گذشتن expiresAt همچنان active=true در دیتابیس می‌ماند؛ VipService.hasVip این مشکل را در عمل می‌پوشاند چون expiresAt را در حافظه دوباره چک می‌کند (vip.expiresAt > new Date())، ولی هر کوئری مستقیم دیگر به جدول user_vip که فقط active=true را فیلتر کند (بدون چک expiresAt) رکوردهای منقضی‌شده را هم به اشتباه فعال می‌بیند."
+      "صدا_زده_می‌شود_از": "⚠️ هیچ‌جا — هنوز orphan است. VipService.hasVip در حافظه expiresAt را چک می‌کند ولی رکورد در دیتابیس active=true می‌ماند."
     },
 
     "BoostService.activateInstant(userId)": {
-      "صدا_زده_می‌شود_از": "⚠️ هیچ‌جا — کاملاً orphan.",
-      "نکته": "این متد کامل‌ترین و درست‌ترین پیاده‌سازی فعال‌سازی بوست در کل ماژول است (race-condition-safe با decrement اتمیک، PaywallException اگر instantCount=0، enqueue به Redis، لاگ رویداد، و حتی فراخوانی phaseService.learnFromFeedback با event='boost_used'). با این‌حال هیچ controller ای آن را صدا نمی‌زند. نتیجه عملی: کاربری که از طریق grant-bundle یا grant-free تعداد instantCount را افزایش داده، در حال حاضر هیچ endpoint عمومی برای واقعاً 'استفاده کردن' و فعال‌سازی آن بوست در اختیار ندارد."
+      "صدا_زده_می‌شود_از": "⚠️ هیچ‌جا — هنوز orphan است. کاربر می‌تواند instantCount داشته باشد ولی endpoint عمومی برای 'استفاده' از آن وجود ندارد."
     },
 
     "BoostService.activateMonthly(userId, strength)": {
-      "صدا_زده_می‌شود_از": "⚠️ هیچ‌جا — کاملاً orphan، مشابه activateInstant.",
-      "نکته": "این یکی حتی PaywallException هم ندارد (هیچ چک پیش‌نیازی) و مستقیماً boost ماهانه فعال می‌کند — احتمالاً برای یک بسته VIP/Premium در نظر گرفته شده که هنوز به جایی وصل نشده."
+      "صدا_زده_می‌شود_از": "⚠️ هیچ‌جا — هنوز orphan است."
     },
 
     "PaywallGuard + @Paywall() decorator": {
-      "صدا_زده_می‌شود_از": "⚠️ @Paywall() در کل سورس پروژه روی هیچ متد کنترلری استفاده نشده — یعنی PaywallGuard ثبت شده ولی هیچ‌وقت در عمل اجرا نمی‌شود.",
-      "نکته": "این یک مکانیزم کاملاً جدا و موازی با PaywallException است: PaywallGuard قرار بوده 'soft paywall' باشد (همیشه true برمی‌گرداند، فقط req.paywall را پر می‌کند تا کلاینت خودش تصمیم بگیرد)، در حالی که PaywallException یک 'hard paywall' واقعی است (واقعاً ۴۰۲ برمی‌گرداند و عملیات را متوقف می‌کند). در حال حاضر فقط مکانیزم سخت‌گیرانه (Exception) واقعاً در حال استفاده است؛ مکانیزم نرم (Guard) کاملاً مرده است."
-    },
-
-    "PaywallService.getPaywall(userId, reason) و adjustWeights": {
-      "صدا_زده_می‌شود_از": ["src/payments/promotion-exposure.service.ts → trackDismiss() (فقط adjustWeights، نه getPaywall)"],
-      "نکته": "getPaywall (که محتوای شخصی‌سازی‌شده با وزن‌دهی Redis تولید می‌کند) در کل سورس فعلی از هیچ‌جا صدا زده نمی‌شود — یعنی این سیستم پیشنهاد paywall هوشمند ساخته شده ولی به هیچ route یا تریگری وصل نیست. فقط نیمه‌ی یادگیری آن (adjustWeights، وقتی کاربر یک تبلیغ را dismiss می‌کند) فعال است، نه نیمه‌ی نمایش آن."
+      "صدا_زده_می‌شود_از": "⚠️ در هیچ کنترلری استفاده نشده — کاملاً مرده."
     }
   },
 
   "نکات_کلی": [
-    "🔴🔴 دو endpoint با تأثیر مالی مستقیم (grant-bundle شامل VIP رایگان، و grant-free) بدون هیچ احراز هویتی در دسترس عموم هستند — این مهم‌ترین یافته امنیتی در کل بررسی این پروژه تا اینجا است و باید فوراً رفع شود (حداقل JwtAuthGuard، ایده‌آل یک AdminApiGuard مثل کنترلر admin-api/payments).",
-    "سه متد کلیدی فعال‌سازی (VipService.expireVip، BoostService.activateInstant، BoostService.activateMonthly) کاملاً نوشته و آماده‌اند ولی به هیچ route یا scheduler وصل نیستند — این الگوی 'کد آماده ولی wire نشده' در این ماژول بیشتر از هر ماژول دیگری که تا اینجا بررسی کردیم تکرار شده (در Feed هم با trackDismiss دیدیم).",
-    "دو مکانیزم کاملاً موازی و ناهماهنگ برای 'پرداخت لازم است' وجود دارد: PaywallException (hard، واقعاً مسدود می‌کند، فقط در MessageController به HTTP صحیح تبدیل می‌شود) و PaywallGuard+@Paywall (soft، هیچ‌وقت استفاده نشده). اگر BoostService.activateInstant در آینده به یک route وصل شود، PaywallException آن فقط در صورتی به ۴۰۲ معنادار تبدیل می‌شود که آن controller هم همان الگوی try/catch دستی MessageController را تکرار کند — در غیر این صورت یک ۵۰۰ خام خواهد بود.",
-    "هیچ تراکنش دیتابیسی (DB transaction) دور حلقه‌ی grantBundle نیست — اگر اعطای آیتم دوم بسته (مثلاً boost) موفق شود ولی آیتم سوم (vip) fail شود، کاربر نیمی از بسته را گرفته و دیتابیس در حالت ناسازگار می‌ماند بدون rollback.",
-    "PhaseService.markEverPaid، برخلاف یافته‌ی قبلی در بررسی مجزای ماژول Phase که می‌گفت 'هیچ caller پیدا نشد'، در واقع از همین‌جا (PaymentsService.grantBundle) صدا زده می‌شود — این یک تصحیح به یافته‌های قبلی است که نشان می‌دهد بررسی هر ماژول به‌تنهایی می‌تواند caller هایی را که در ماژول‌های بعدی کشف می‌شوند از قلم بیندازد.",
-    "جدول payments (پرداخت واقعی، که AdminApiPaymentsController.totalRevenue از آن می‌خواند) کاملاً جدا از مسیر grantBundle/grantFreeOnce است — یعنی در حال حاضر هیچ تضمینی نیست که هر چیزی که 'اعطا' شده، یک رکورد متناظر در payments هم داشته باشد؛ این دو منبع داده می‌توانند به‌مرور زمان به‌شدت ناهماهنگ شوند، به‌خصوص به‌خاطر نبود authentication روی grant-bundle.",
-    "PaywallService.getPaywall (تولید محتوای پرداخت شخصی‌سازی‌شده با تن آموزشی/نرم/سخت) به هیچ endpoint وصل نیست — فقط بخش یادگیری وزن‌هایش (adjustWeights، از طریق dismiss تبلیغ در Feed) فعال است."
+    "🔴🔴 grant-bundle و grant-free هنوز بدون authentication هستند — مهم‌ترین حفره امنیتی که در نسخه refYar هنوز باقی است.",
+    "✅ PaywallDecisionService جدید تمام منطق paywall را در یک مکان متمرکز کرده — Phase + Trust + LTV + VIP + Credits. این معماری صحیح است.",
+    "⚠️ PaywallDecisionService هنوز به MessageService وصل نیست — کلاینت هنوز باید is_free=false بفرستد تا اعتبار کسر شود. 'Cold رایگان' و 'VIP رایگان' فعلاً اجرایی نیستند.",
+    "✅ PartitionedEvent (نه PartitionedEvent منسوخ) در PaywallDecisionService مرتبط با TrustScoreService استفاده می‌شود.",
+    "سه متد orphan (expireVip، activateInstant، activateMonthly) همچنان wire نشده‌اند.",
+    "جدول payments (پرداخت واقعی) کاملاً جدا از grantBundle/grantFree است — این دو می‌توانند به‌مرور ناهماهنگ شوند."
   ]
 }

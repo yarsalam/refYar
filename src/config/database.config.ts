@@ -22,7 +22,6 @@ import { UserBoost } from 'src/payments/boosts/entities/user-boost.entity';
 import { UserPhase } from 'src/phase/entities/user-phase.entity';
 import { UserVip } from 'src/payments/vip/entities/vip.entity';
 import { UserCredits } from 'src/payments/credits/entities/user-credits.entity';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
 import { ProductBundle } from 'src/product/entities/product-bundle.entity';
 import { CompetitorData } from 'src/seo/entities/competitor-data.entity';
 import { SEOActivity } from 'src/seo/entities/seo-activity.entity';
@@ -106,7 +105,7 @@ export default registerAs(
       UserCredits,
       UserPhase,
       UserVip,
-      UserEventLogs,
+      PartitionedEvent,
       ProductBundle,
       CompetitorData,
       SEOMetrics,
@@ -119,7 +118,6 @@ export default registerAs(
       Payment,
       SEOActivity,
       ArchiveRequest,
-      PartitionedEvent,
     ],
     synchronize: resolveSynchronize(),
     // logging: resolveLogging(),

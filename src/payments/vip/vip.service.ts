@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserVip } from './entities/vip.entity';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { BoostQueueService } from 'src/redis/boost-queue.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class VipService {

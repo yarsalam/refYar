@@ -16,7 +16,7 @@ import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 
 @Module({
   imports: [
-    // FIX: UserEventLogs (deprecated) → PartitionedEvent (user_events فعال)
+    // FIX: PartitionedEvent (deprecated) → PartitionedEvent (user_events فعال)
     TypeOrmModule.forFeature([User, Payment, SEOActivity, PartitionedEvent]),
     QueuesModule,
     RedisModule,

@@ -1,4 +1,4 @@
-import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AssistantConversation } from './entities/assistant-conversation.entity';
@@ -7,9 +7,9 @@ import { ProblemDetectorService } from './analyzers/problem-detector.service';
 import { GuidanceGeneratorService } from './guidance/guidance-generator.service';
 import { PhaseOptimizerService } from './optimizers/phase-optimizer.service';
 import { UserEventService } from '../user-event/user-event.service';
-import { EventType } from '../user-event/entities/user-event.entity';
 import { User } from 'src/users/entities/user.entity';
 import { PaymentsService } from 'src/payments/payments.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class AiAssistantService {

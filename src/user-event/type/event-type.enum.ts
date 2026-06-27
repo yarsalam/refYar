@@ -1,11 +1,3 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  Index,
-} from 'typeorm';
-
 export enum EventType {
   // 🔴 Business / Monetization
   PURCHASE = 'purchase',
@@ -80,29 +72,4 @@ export enum EventType {
   COLD_FEED_SHOWN = 'cold_feed_shown',
   PAYMENT_INITIATED = 'payment_initiated',
   USER_REGISTERED = 'user_registered',
-}
-
-/** @deprecated از PartitionedEvent استفاده کنید. */
-@Entity('user_event_logs')
-@Index(['userId', 'type', 'createdAt'])
-@Index(['userId', 'createdAt'])
-@Index(['targetUserId', 'createdAt'])
-export class UserEventLogs {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column()
-  userId: number;
-
-  @Column({ nullable: true })
-  targetUserId?: number;
-
-  @Column({ type: 'enum', enum: EventType })
-  type: EventType;
-
-  @Column({ type: 'json', nullable: true })
-  metadata?: any;
-
-  @CreateDateColumn()
-  createdAt: Date;
 }

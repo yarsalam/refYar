@@ -48,7 +48,7 @@ export class PhaseService {
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
 
-    // FIX (اولویت ۴): قبلاً از UserEventLogs (جدول منسوخ user_event_logs)
+    // FIX (اولویت ۴): قبلاً از PartitionedEvent (جدول منسوخ user_event_logs)
     // خوانده می‌شد، در حالی که UserEventService رویدادها را در PartitionedEvent
     // (جدول فعال user_events) می‌نویسد. در نتیجه فاز هیچ‌وقت روی داده‌های
     // واقعی کاربران یاد نمی‌گرفت.
@@ -316,7 +316,7 @@ export class PhaseService {
       record = this.repo.create({ userId });
       await this.repo.save(record);
     }
-    return record;
+    return record ?? null;
   }
 
   async markEverPaid(userId: number) {

@@ -90,21 +90,26 @@ export class VectorSearchService {
     const cacheKey = `similar:${excludeUserId}:${limit}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
+    try {
+      const results = await this.qdrant.search('user_vectors', {
+        vector: searchVector,
+        limit: limit + 1,
+        filter: {
+          must_not: [{ key: 'userId', match: { value: excludeUserId } }],
+        },
+        with_payload: false,
+      });
 
-    const results = await this.qdrant.search('user_vectors', {
-      vector: searchVector,
-      limit: limit + 1,
-      filter: {
-        must_not: [{ key: 'userId', match: { value: excludeUserId } }],
-      },
-      with_payload: false,
-    });
+      const ids = results
+        .map((r) => r.id as number)
+        .filter((id) => id !== excludeUserId);
+      await this.redis.set(cacheKey, JSON.stringify(ids), 'EX', 60);
+      return ids;
+    } catch (err) {
+      this.logger.error('Qdrant search failed', err);
 
-    const ids = results
-      .map((r) => r.id as number)
-      .filter((id) => id !== excludeUserId);
-    await this.redis.set(cacheKey, JSON.stringify(ids), 'EX', 60);
-    return ids;
+      return [];
+    }
   }
 
   private buildProfileVectorFromUser(user: User): number[] {

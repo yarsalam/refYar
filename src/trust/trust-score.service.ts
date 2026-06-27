@@ -3,9 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../users/entities/user.entity';
 import { UserEventService } from '../user-event/user-event.service';
-import { EventType } from '../user-event/entities/user-event.entity';
 import { Report } from 'src/report-block/entities/report.entity';
 import { DevicePhoneService } from 'src/auth/device-phone/device-phone.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 export interface TrustContext {
   /** ۰–۱۰۰: اعتماد کلی کاربر (هویت، رفتار، سابقه) */

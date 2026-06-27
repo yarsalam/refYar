@@ -2,16 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import { User } from '../users/entities/user.entity';
-import { EventType } from 'src/user-event/entities/user-event.entity';
-
 import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class FeatureService {
   private readonly logger = new Logger(FeatureService.name);
 
   constructor(
-    // FIX: Repository<PartitionedEvent> جای Repository<UserEventLogs> را گرفت
+    // FIX: Repository<PartitionedEvent> جای Repository<PartitionedEvent> را گرفت
     @InjectRepository(PartitionedEvent)
     private readonly eventRepo: Repository<PartitionedEvent>,
     @InjectRepository(User)
@@ -59,7 +58,7 @@ export class FeatureService {
     return features;
   }
 
-  // FIX: نوع خروجی PartitionedEvent[] است نه UserEventLogs[]
+  // FIX: نوع خروجی PartitionedEvent[] است نه PartitionedEvent[]
   private async getUserEvents(userId: number): Promise<PartitionedEvent[]> {
     return this.eventRepo.find({
       where: { userId },
@@ -68,7 +67,7 @@ export class FeatureService {
     });
   }
 
-  // FIX: پارامتر نوع PartitionedEvent[] است نه UserEventLogs[]
+  // FIX: پارامتر نوع PartitionedEvent[] است نه PartitionedEvent[]
   private async calculateEngagementScore(
     userId: number,
     events: PartitionedEvent[],

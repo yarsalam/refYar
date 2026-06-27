@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule'; // برای Cron
-import { UserEventLogs } from '../user-event/entities/user-event.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { User } from '../users/entities/user.entity';
 import { UserEventModule } from '../user-event/user-event.module';
@@ -14,7 +13,7 @@ import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.enti
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEventLogs, Payment, User, PartitionedEvent]), // ✅ همه entityها اینجا
+    TypeOrmModule.forFeature([Payment, User, PartitionedEvent]), // ✅ همه entityها اینجا
     ScheduleModule.forRoot(), // برای Cron
     UserEventModule,
   ],

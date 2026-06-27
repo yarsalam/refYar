@@ -22,7 +22,7 @@ export class SEORetentionService {
           u.acquisition_source,
           u.acquisition_keyword,
           COUNT(u.id) as users
-        FROM users u
+        FROM user u
         WHERE u.acquisition_keyword IS NOT NULL
         GROUP BY cohort_week, acquisition_source, acquisition_keyword
       ),
@@ -34,7 +34,7 @@ export class SEORetentionService {
           1.0 * COUNT(DISTINCT CASE WHEN e.created_at > DATE_ADD(u.created_at, INTERVAL 30 DAY) 
                 THEN u.id END) / COUNT(DISTINCT u.id) as retention_30d,
           AVG(p.amount) as avg_ltv
-        FROM users u
+        FROM user u
         LEFT JOIN user_events e ON e.user_id = u.id
         LEFT JOIN payments p ON p.user_id = u.id AND p.status = 'paid'
         GROUP BY u.acquisition_keyword

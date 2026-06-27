@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -39,8 +39,24 @@ export class NotificationService {
     });
   }
 
-  async markAsRead(notificationId: number) {
-    return this.notifRepo.update(notificationId, { is_read: true });
+  async markAsRead(notificationId: number, userId: number) {
+    const result = await this.notifRepo.update(
+      {
+        id: notificationId,
+        user_id: userId,
+      },
+      {
+        is_read: true,
+      },
+    );
+
+    if (!result.affected) {
+      throw new ForbiddenException();
+    }
+
+    return {
+      success: true,
+    };
   }
 
   async countUnread(userId: number) {

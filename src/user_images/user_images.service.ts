@@ -9,7 +9,7 @@ import * as path from 'path';
 import { resizeAndSaveImageHelper } from 'src/helpers/resizeImage';
 import { AiImageService } from 'src/ai-image/ai-image.service';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class UserImageService {

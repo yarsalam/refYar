@@ -15,9 +15,9 @@ import {
 } from '@nestjs/common';
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
-import { PaywallException } from 'src/payments/paywall/paywall.exception';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { GetUser } from 'src/auth/decorator/get-user/get-user.decorator';
+import { PaywallException } from 'src/payments/paywall/paywall.exception';
 
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
@@ -30,17 +30,19 @@ export class MessageController {
     console.log('JWT USER ID =', userId);
     try {
       return await this.messageService.sendMessage(userId, dto);
-    } catch (error: any) {
-      console.error('PAYWALL CAUGHT', error);
+    } catch (error) {
+      if (error instanceof PaywallException) {
+        throw new HttpException(
+          {
+            statusCode: 402,
+            message: 'اعتبار کافی ندارید',
+            paywall: error.payload,
+          },
+          HttpStatus.PAYMENT_REQUIRED,
+        );
+      }
 
-      throw new HttpException(
-        {
-          statusCode: 402,
-          message: 'اعتبار کافی ندارید',
-          paywall: error.payload,
-        },
-        HttpStatus.PAYMENT_REQUIRED,
-      );
+      throw error;
     }
   }
 
@@ -62,8 +64,11 @@ export class MessageController {
   }
 
   @Patch('read/:id')
-  markAsRead(@Param('id', ParseIntPipe) id: number) {
-    return this.messageService.markAsRead(id);
+  markAsRead(
+    @GetUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.messageService.markAsRead(id, userId);
   }
 
   @Delete('inbox/:id')
@@ -100,6 +105,7 @@ export class MessageController {
     @Query('page', new DefaultValuePipe(0), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
+    limit = Math.min(limit, 100);
     return this.messageService.getConversation(userId, targetId, page, limit);
   }
 

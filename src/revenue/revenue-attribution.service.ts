@@ -82,7 +82,7 @@ export class RevenueAttributionService {
     const users = await this.userRepo
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.payments', 'payments')
-      .leftJoinAndSelect('user.zuserEvents', 'events')
+      .leftJoinAndSelect('user.userEvents', 'events')
       .where('user.createdAt >= :date', {
         date: new Date(Date.now() - days * 86400000),
       })

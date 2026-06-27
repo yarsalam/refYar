@@ -9,11 +9,11 @@
  * فقط اینجاست — نه در PaywallDecisionService، نه در MessageService.
  *
  * قوانین به ترتیب اولویت:
- *   ۱. VIP → همیشه مجاز
- *   ۲. ریسک دستگاه بالا → همیشه ممنوع (فریب‌کار بالقوه)
- *   ۳. فاز Cold + Trust بالا + Device Risk پایین → رایگان
- *   ۴. اعتبار کافی → مصرف اعتبار
- *   ۵. در غیر این صورت → Paywall
+ *   1. ریسک دستگاه بالا → همیشه ممنوع (فریب‌کار بالقوه)
+ *   2. VIP → همیشه مجاز
+ *   3. فاز Cold + Trust بالا + Device Risk پایین → رایگان
+ *   4. اعتبار کافی → مصرف اعتبار
+ *   5. در غیر این صورت → Paywall
  */
 
 export interface PaywallContext {
@@ -23,8 +23,6 @@ export interface PaywallContext {
   trustScore: number;
   /** ۰–۱۰۰: ریسک دستگاه (چند حساب / چند دستگاه) */
   deviceRisk: number;
-  /** LTV پیش‌بینی‌شده (تومان) — برای تصمیم‌های آینده */
-  predictedLtv: number;
   /** موجودی اعتبار */
   credits: number;
   /** آیا اشتراک VIP فعال دارد؟ */
@@ -66,14 +64,7 @@ const HIGH_RISK_THRESHOLD = 80;
 // ─── Policy evaluator ────────────────────────────────────────────────────────
 
 export function evaluatePaywallPolicy(ctx: PaywallContext): PolicyResult {
-  // ۱. VIP: همیشه مجاز، هرگز اعتبار مصرف نمی‌شود.
-  if (ctx.vip) {
-    return { allowed: true, reason: 'vip', consumeCredits: false };
-  }
-
-  // ۲. ریسک دستگاه بالا: حتی در فاز Cold هم رایگان نیست.
-  //    این قانون قبل از فاز بررسی می‌شود تا حساب‌های multi-device از
-  //    سیستم Cold-free سوءاستفاده نکنند.
+  // ۱. امنیت اول: ریسک دستگاه بالا → رد کامل (حتی VIPها)
   if (ctx.deviceRisk > HIGH_RISK_THRESHOLD) {
     return {
       allowed: false,
@@ -82,9 +73,12 @@ export function evaluatePaywallPolicy(ctx: PaywallContext): PolicyResult {
     };
   }
 
+  // ۲. VIP: همیشه مجاز، هرگز اعتبار مصرف نمی‌شود.
+  if (ctx.vip) {
+    return { allowed: true, reason: 'vip', consumeCredits: false };
+  }
+
   // ۳. فاز Cold با Trust کافی و Device Risk پایین: رایگان.
-  //    Trust < COLD_FREE_MIN_TRUST = حساب مشکوک، رایگان نیست.
-  //    DeviceRisk > COLD_FREE_MAX_DEVICE_RISK = الگوی ساختگی، رایگان نیست.
   if (
     ctx.phase === 'cold' &&
     ctx.trustScore >= COLD_FREE_MIN_TRUST &&
@@ -98,7 +92,6 @@ export function evaluatePaywallPolicy(ctx: PaywallContext): PolicyResult {
   }
 
   // ۴. اعتبار کافی: مصرف اعتبار.
-  //    (در این مرحله: warm/hot بدون VIP، یا cold با trust/deviceRisk ناکافی)
   if (ctx.credits > 0) {
     return { allowed: true, reason: 'credits_available', consumeCredits: true };
   }

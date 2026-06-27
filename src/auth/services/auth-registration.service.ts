@@ -6,6 +6,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { performance } from 'perf_hooks';
 import { Request } from 'express';
@@ -19,7 +20,6 @@ import { RedisService } from '../../redis/redis.service';
 import { DevicePhoneService } from '../device-phone/device-phone.service';
 import { DevicePhoneEvent } from '../device-phone/entities/device-phone.entity';
 import { UserEventService } from '../../user-event/user-event.service';
-import { EventType } from '../../user-event/entities/user-event.entity';
 import { PhaseService } from '../../phase/phase.service';
 import { CreateAuthDto } from '../dto/create-auth.dto';
 import { CompleteProfileDto } from '../dto/complete-profile.dto';
@@ -27,6 +27,7 @@ import { UpdateUserDto } from '../../users/dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { RequestHelper } from 'src/helpers/RequestHelper';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class AuthRegistrationService {
@@ -70,6 +71,10 @@ export class AuthRegistrationService {
       );
       t = mark('findByPhone', t);
 
+      if (existingUser?.status === 'admin_blocked') {
+        throw new ForbiddenException('حساب شما مسدود شده است');
+      }
+
       if (existingUser?.isCompleted) {
         throw new HttpException(
           { message: 'این شماره قبلاً ثبت‌نام کرده.', code: 'EXISTING_USER' },
@@ -79,13 +84,44 @@ export class AuthRegistrationService {
 
       // ── ۲) create یا update user ─────────────────────────────────────
       const { recaptchaToken, platform, ...userData } = createAuthDto;
+
+      const referer = req.headers['referer'] || req.headers['referrer'] || '';
+      const ua = (req.headers['user-agent'] as string) || '';
+
+      // تشخیص خودکار source اگه فرانت نفرستاده باشه
+      let autoSource = 'direct';
+      if (referer.includes('instagram.com')) autoSource = 'instagram';
+      else if (referer.includes('t.me') || referer.includes('telegram'))
+        autoSource = 'telegram';
+      else if (referer.includes('web.whatsapp.com')) autoSource = 'whatsapp';
+      else if (referer.includes('google.com')) autoSource = 'google';
+      else if (referer.includes('bale.ai')) autoSource = 'bale';
+      else if (referer.includes('myket.ir')) autoSource = 'myket';
+      else if (referer.includes('cafebazaar.ir')) autoSource = 'bazaar';
+
       let user;
       if (existingUser) {
-        user = await this.usersService.update(existingUser.id, userData);
+        const updateData: any = { ...userData };
+        if (
+          !existingUser.acquisitionSource &&
+          (userData.acquisitionSource || autoSource)
+        ) {
+          updateData.acquisitionSource =
+            userData.acquisitionSource || autoSource;
+        }
+
+        user = await this.usersService.update(existingUser.id, updateData);
       } else {
         user = await this.usersService.create({
           ...userData,
-          metadata: { acquisitionSource: req.headers['referer'] || 'direct' },
+          acquisitionSource: userData.acquisitionSource || autoSource,
+          acquisitionKeyword: userData.acquisitionKeyword || undefined,
+          metadata: {
+            ...userData,
+            acquisitionMeta: {
+              userAgent: ua.substring(0, 200),
+            },
+          },
         });
       }
       t = mark(existingUser ? 'updateUser' : 'createUser', t);
@@ -208,7 +244,9 @@ export class AuthRegistrationService {
 
       const user = await this.usersService.findById(userId);
       if (!user) throw new UnauthorizedException('کاربر یافت نشد');
-
+      if (user?.status === 'admin_blocked') {
+        throw new ForbiddenException('حساب شما مسدود شده است');
+      }
       const changedFields: string[] = [];
       if (dto.nickname !== undefined) changedFields.push('nickname');
       if (dto.birthDate)
@@ -259,6 +297,11 @@ export class AuthRegistrationService {
       if (dto.password?.trim()) {
         updateData.password = await bcrypt.hash(dto.password, 10);
         changedFields.push('password');
+      }
+
+      if (dto.acquisitionSource && !user.acquisitionSource) {
+        updateData.acquisitionSource = dto.acquisitionSource;
+        changedFields.push('acquisitionSource');
       }
 
       const updatedUser = await this.usersService.update(userId, updateData);

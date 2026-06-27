@@ -5,11 +5,11 @@ import { Cron } from '@nestjs/schedule';
 import { ProfileVisitor } from './entities/profile-visitor.entity';
 import { User } from '../users/entities/user.entity';
 import { UserEventService } from '../user-event/user-event.service';
-import { EventType } from '../user-event/entities/user-event.entity';
 import { VisitorInsightsDto } from './dto/visitor-insights.dto';
 import { RedisService } from '../redis/redis.service';
 import { RelationStatusService } from 'src/relation-status/relation-status.service';
 import { RelationStatusDto } from 'src/relation-status/dto/relation-status.dto';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class ProfileVisitorsService {

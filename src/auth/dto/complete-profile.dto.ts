@@ -93,5 +93,9 @@ export class CompleteProfileDto {
 
   @IsOptional()
   @IsString()
+  acquisitionSource?: string;
+
+  @IsOptional()
+  @IsString()
   password?: string;
 }

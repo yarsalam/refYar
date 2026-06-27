@@ -9,8 +9,8 @@ import { createHash } from 'crypto';
 import { User } from '../users/entities/user.entity';
 import { Message } from '../message/entities/message.entity';
 import { UserEventService } from '../user-event/user-event.service';
-import { EventType } from '../user-event/entities/user-event.entity';
 import { ModerationLog } from './entities/moderation-log.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 export interface ModerationResult {
   isSafe: boolean;

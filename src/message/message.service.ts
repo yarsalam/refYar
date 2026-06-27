@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Message } from './entities/message.entity';
@@ -8,17 +15,16 @@ import { GroupedMessageDto } from './dto/grouped-message.dto';
 import { User } from 'src/users/entities/user.entity';
 import { getUserAvatar } from 'src/helpers/user-query.helper';
 import { formatToJalali } from 'src/helpers/date.utils';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { UserEventService } from 'src/user-event/user-event.service';
 import { ModerationService } from 'src/moderation/moderation.service';
-import { CreditsService } from 'src/payments/credits/credits.service';
 import { PaywallException } from 'src/payments/paywall/paywall.exception';
-
 import { RevenueScorerService } from 'src/suggestion/scoring/revenue-scorer.service';
 import { FeatureStoreService } from 'src/feature-store/feature-store.service';
 import { RelationStatusService } from 'src/relation-status/relation-status.service';
 import { ChatGateway } from './chat.gateway';
 import { Repository, IsNull, In } from 'typeorm';
+import { PaywallDecisionService } from 'src/payments/paywall/paywall-decision.service';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class MessageService {
@@ -39,7 +45,7 @@ export class MessageService {
     private readonly notificationService: NotificationService,
     private readonly userEventService: UserEventService,
     private readonly moderationService: ModerationService,
-    private readonly creditsService: CreditsService,
+    private readonly paywallDecisionService: PaywallDecisionService,
     private readonly revenueScorer: RevenueScorerService,
     private readonly featureStore: FeatureStoreService,
     private readonly relationStatus: RelationStatusService,
@@ -51,7 +57,7 @@ export class MessageService {
       dto.to_id,
     );
     if (relation.isBlocked) {
-      throw new Error('امکان ارسال پیام به کاربر بلاک‌شده وجود ندارد');
+      throw new ForbiddenException('کاربر شما را بلاک کرده است');
     }
 
     const moderationResult = await this.moderationService.moderateMessage(
@@ -67,19 +73,29 @@ export class MessageService {
       throw new Error('پیام شما به دلیل محتوای نامناسب ارسال نشد.');
     }
 
-    if (!dto.is_free) {
-      try {
-        await this.creditsService.consume(fromUserId, 1, 'send_message');
-      } catch (error) {
-        if (error instanceof PaywallException) throw error;
-        throw new Error('خطا در بررسی اعتبار');
+    let isFree = false;
+
+    try {
+      const decision = await this.paywallDecisionService.checkAndConsume(
+        fromUserId,
+        1,
+        'send_message',
+      );
+
+      isFree =
+        decision.reason === 'vip' || decision.reason === 'cold_phase_trusted';
+    } catch (error) {
+      if (error instanceof PaywallException) {
+        throw error;
       }
+
+      throw new Error('خطا در بررسی دسترسی ارسال پیام');
     }
 
     const message = this.messageRepo.create({
       ...dto,
       from_id: fromUserId,
-      is_free: dto.is_free ?? true,
+      is_free: isFree,
     });
 
     const saved = await this.messageRepo.save(message);
@@ -142,8 +158,22 @@ export class MessageService {
     return query.orderBy('message.created_at', 'DESC').getMany();
   }
 
-  async markAsRead(messageId: number) {
-    return this.messageRepo.update(messageId, { read_at: new Date() });
+  async markAsRead(messageId: number, userId: number) {
+    const result = await this.messageRepo.update(
+      {
+        id: messageId,
+        to_id: userId,
+      },
+      {
+        read_at: new Date(),
+      },
+    );
+
+    if (!result.affected) {
+      throw new NotFoundException('پیام یافت نشد');
+    }
+
+    return { success: true };
   }
 
   async deleteFromInbox(messageId: number, userId: number) {
@@ -317,14 +347,6 @@ export class MessageService {
     };
   }
 
-  private async getUserFlags(
-    currentUserId: number,
-    targetUserId: number,
-    targetUserStatus?: string,
-  ) {
-    return this.getUserFlagsSync(targetUserStatus);
-  }
-
   async getUserMessages(userId: number) {
     const messages = await this.messageRepo.find({
       where: { from_id: userId },
@@ -359,13 +381,55 @@ export class MessageService {
     if (!message) {
       throw new NotFoundException('پیام یافت نشد یا امکان ویرایش وجود ندارد');
     }
+
+    // 🔴 بررسی ماژریشن محتوای جدید
+    const moderationResult = await this.moderationService.moderateMessage(
+      content,
+      message.from_id,
+      message.to_id,
+    );
+
+    if (moderationResult.action === 'block') {
+      this.logger.warn(
+        `Edited message blocked by moderation: user ${message.from_id} -> ${message.to_id}, severity: ${moderationResult.severity}`,
+      );
+      throw new HttpException(
+        'پیام شما به دلیل محتوای نامناسب قابل ویرایش نیست.',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    // ذخیره محتوای جدید با وضعیت ماژریشن به‌روزرسانی‌شده
     message.content = content;
-    return this.messageRepo.save(message);
+    message.moderationStatus =
+      moderationResult.severity === 'low' ? 'approved' : 'flagged';
+
+    const saved = await this.messageRepo.save(message);
+
+    // لاگ رویداد (اختیاری—می‌توانید اضافه کنید)
+    this.userEventService
+      .log({
+        userId,
+        type: EventType.PROFILE_UPDATE,
+        metadata: {
+          messageId: saved.id,
+          edited: true,
+          moderationSeverity: moderationResult.severity,
+        },
+      })
+      .catch((err) =>
+        this.logger.error('Failed to log message edit event', err),
+      );
+
+    return saved;
   }
 
   async reportMessage(messageId: number, userId: number) {
     const message = await this.messageRepo.findOne({
-      where: { id: messageId },
+      where: [
+        { id: messageId, to_id: userId },
+        { id: messageId, from_id: userId },
+      ],
     });
     if (!message) throw new NotFoundException('پیام یافت نشد');
     await this.userEventService.log({

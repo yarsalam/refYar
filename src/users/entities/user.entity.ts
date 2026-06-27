@@ -5,6 +5,7 @@ import { UserBoost } from 'src/payments/boosts/entities/user-boost.entity';
 import { Payment } from 'src/payments/entities/payment.entity';
 import { ProfileVisitor } from 'src/profile-visitors/entities/profile-visitor.entity';
 import { UserDevice } from 'src/user-device/entities/user-device.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 import { UserPhone } from 'src/user-phones/entities/user-phone.entity';
 import { UserImage } from 'src/user_images/entities/user_image.entity';
 import {
@@ -117,6 +118,9 @@ export class User {
   @OneToMany(() => UserImage, (userImage) => userImage.user)
   userImages?: UserImage[];
 
+  @OneToMany(() => PartitionedEvent, (event) => event.user)
+  userEvents: PartitionedEvent[];
+
   // کاربرانی که پروفایل این کاربر را بازدید کرده‌اند
   @OneToMany(() => ProfileVisitor, (profileVisitor) => profileVisitor.profile)
   profileVisitors: ProfileVisitor[];
@@ -188,6 +192,12 @@ export class User {
     default: 'free',
   })
   tier: 'free' | 'premium' | 'gold' | 'vip';
+
+  @Column({ nullable: true })
+  acquisitionKeyword?: string;
+
+  @Column({ nullable: true })
+  acquisitionSource?: string; // 'instagram', 'telegram', 'whatsapp', 'google', 'referral', 'direct', etc.
 
   @Column({ default: false })
   isVerified: boolean;

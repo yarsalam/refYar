@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Payment } from 'src/payments/entities/payment.entity';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { EntityManager, MoreThan, Repository } from 'typeorm';
 
 import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Injectable()
 export class UserMetricsService {

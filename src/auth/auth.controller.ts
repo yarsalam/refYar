@@ -22,9 +22,9 @@ import { TemporaryOnlyGuard } from './temporary-only-guard.guard';
 import { CurrentUser } from 'src/current-user/current-user.decorator';
 import { RequestHelper } from 'src/helpers/RequestHelper';
 import { UserEventService } from 'src/user-event/user-event.service';
-import { EventType } from 'src/user-event/entities/user-event.entity';
 import { GetUser } from './decorator/get-user/get-user.decorator';
 import { JwtService } from '@nestjs/jwt';
+import { EventType } from 'src/user-event/type/event-type.enum';
 
 @Controller('auth')
 export class AuthController {

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { DailyEventAggregate } from '../aggregates/daily-event-aggregate.entity';
 import { UserCohort } from '../aggregates/user-cohort.entity';
-import { EventType } from '../entities/user-event.entity';
+import { EventType } from '../type/event-type.enum';
 
 @Injectable()
 export class RevenueAnalyzerService {

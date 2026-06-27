@@ -26,7 +26,6 @@ import { InteractionsModule } from 'src/interaction/interaction.module';
 import { FeatureStoreRevenueModule } from 'src/feature-store-rvenue/feature-store-rvenue.module';
 import { SEORetentionService } from './services/analytics/seo-retention.service';
 import { SEOService } from './services/seo.service';
-import { UserEventLogs } from 'src/user-event/entities/user-event.entity';
 import { User } from 'src/users/entities/user.entity';
 import { ContentOpportunityService } from './services/intelligence/content-opportunity.service';
 import { Interaction } from 'src/interaction/entities/interaction.entity';
@@ -39,6 +38,7 @@ import { BrandSentimentService } from './services/brand-sentiment.service';
 import { FeatureStoreModule } from 'src/feature-store/feature-store.module';
 import { AutoExecutorService } from './services/intelligence/auto-executor.service';
 import { RevenueModule } from 'src/revenue/revenue.module';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 @Module({
   imports: [
@@ -47,7 +47,7 @@ import { RevenueModule } from 'src/revenue/revenue.module';
       SEOActivity,
       SEORecommendation,
       CompetitorData,
-      UserEventLogs,
+      PartitionedEvent,
       User,
       Interaction,
       Payment,

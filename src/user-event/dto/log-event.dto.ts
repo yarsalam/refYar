@@ -1,4 +1,4 @@
-import { EventType } from '../entities/user-event.entity';
+import { EventType } from '../type/event-type.enum';
 
 export class LogEventDto {
   userId: number;

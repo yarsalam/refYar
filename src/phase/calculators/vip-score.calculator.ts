@@ -1,17 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserEventLogs } from '../../user-event/entities/user-event.entity';
 import { Message } from '../../message/entities/message.entity';
 import { InteractionsService } from '../../interaction/interaction.service';
 import { UserMetricsService } from '../../user-metrics/user-metrics.service';
 import { User } from 'src/users/entities/user.entity';
+import { PartitionedEvent } from 'src/user-event/entities/partitioned-event.entity';
 
 @Injectable()
 export class VipScoreCalculator {
   constructor(
-    @InjectRepository(UserEventLogs)
-    private readonly eventRepo: Repository<UserEventLogs>,
+    @InjectRepository(PartitionedEvent)
+    private readonly eventRepo: Repository<PartitionedEvent>,
 
     @InjectRepository(Message)
     private readonly messageRepo: Repository<Message>,

@@ -6,23 +6,25 @@ import {
   ParseIntPipe,
   Post,
   Body,
+  UseGuards,
 } from '@nestjs/common';
 import { SuggestionService } from './suggestion.service';
 import { UserEventService } from 'src/user-event/user-event.service';
 import { GetUser } from 'src/auth/decorator/get-user/get-user.decorator';
-import { EventType } from 'src/user-event/entities/user-event.entity';
+import { EventType } from 'src/user-event/type/event-type.enum';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 @Controller('suggestions')
+@UseGuards(JwtAuthGuard)
 export class SuggestionController {
   constructor(
     private readonly suggestionService: SuggestionService,
     private readonly userEventService: UserEventService,
   ) {}
 
-  // GET /suggestions?userId=123&limit=20
   @Get()
   async getSuggestions(
-    @Query('userId', ParseIntPipe) userId: number,
+    @GetUser('id') userId: number,
     @Query('limit') limit?: string,
     @Query('city') city?: string,
   ) {
